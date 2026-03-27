@@ -1,0 +1,7 @@
+[
+  {"id":1,"title":"Router policy and delegation","category":"routing","body":"Use a lightweight router to delegate user requests to the right specialist workflow while preserving traceable decisions.","embedding":[0.91,0.10,0.15,0.05]},
+  {"id":2,"title":"Memory and session state","category":"memory","body":"Persist compact session facts and retrieval summaries so downstream calls can use context without replaying the whole transcript.","embedding":[0.12,0.92,0.08,0.10]},
+  {"id":3,"title":"Retrieval pipeline","category":"retrieval","body":"Blend lexical filters with semantic ranking to pull the most relevant context for grounded responses and evaluations.","embedding":[0.11,0.18,0.93,0.22]},
+  {"id":4,"title":"Evaluation harness","category":"evaluation","body":"Track answer quality, latency, and policy regressions with a repeatable test suite before promoting workflow changes.","embedding":[0.15,0.10,0.21,0.95]},
+  {"id":5,"title":"Agent orchestration runtime","category":"agents","body":"Coordinate planner, executor, and reviewer roles behind a single API while keeping each step observable and bounded.","embedding":[0.85,0.20,0.20,0.05]}
+]

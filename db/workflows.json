@@ -1,0 +1,11 @@
+[
+  {
+    "id":"1f0f2b3c-9c52-6a10-a111-1234567890ab",
+    "name":"Default assistant workflow",
+    "description":"Starter workflow wiring together guardrails and the main prompt.",
+    "promptTemplateId":"tpl-system-1",
+    "inputGuardrailIds":["igr-1","igr-2","igr-3"],
+    "outputGuardrailIds":["ogr-1","ogr-2"],
+    "updatedAt":"2026-03-30T00:00:00Z"
+  }
+]

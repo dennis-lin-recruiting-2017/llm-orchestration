@@ -1,0 +1,14 @@
+[
+  {
+    "provider": "LMStudio",
+    "lmstudio": {
+      "baseURL": "http://127.0.0.1:1234",
+      "model": "local-model"
+    },
+    "ollama": {
+      "baseURL": "http://127.0.0.1:11434",
+      "model": "llama3.1"
+    },
+    "updatedAt": "2026-03-27T00:00:00Z"
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "id":"igr-1",
+    "type":"Regex",
+    "name":"PII redaction check",
+    "description":"Prevent unsafe prompt inputs from including sensitive personal info.",
+    "currentVersion":3,
+    "versions":[
+      {"version":1,"content":"Reject or redact raw SSNs, credit cards, and passwords before prompt assembly.","updatedAt":"2026-03-27T00:00:00Z"},
+      {"version":2,"content":"Example validation: reject email addresses and phone numbers unless the workflow explicitly allows contact data.","updatedAt":"2026-03-28T00:00:00Z"},
+      {"version":3,"content":"Regex example: /(\\b\\d{3}-\\d{2}-\\d{4}\\b)|([A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,})/i","updatedAt":"2026-03-29T00:00:00Z"}
+    ],
+    "updatedAt":"2026-03-29T00:00:00Z"
+  },
+  {
+    "id":"igr-2",
+    "type":"CustomJavaScript",
+    "name":"Structured payload validation",
+    "description":"Validate required fields before prompt construction.",
+    "currentVersion":2,
+    "versions":[
+      {"version":1,"content":"Example validation: require a non-empty topic field for research workflows.","updatedAt":"2026-03-28T00:00:00Z"},
+      {"version":2,"content":"return !!input.topic && ['low','medium','high'].includes(input.priority);","updatedAt":"2026-03-29T00:00:00Z"}
+    ],
+    "updatedAt":"2026-03-29T00:00:00Z"
+  },
+  {
+    "id":"igr-3",
+    "type":"CustomPython",
+    "name":"Python payload validator",
+    "description":"Use embedded Python-like validation logic.",
+    "currentVersion":1,
+    "versions":[
+      {"version":1,"content":"return bool(input.get('topic')) and input.get('priority') in ['low', 'medium', 'high']","updatedAt":"2026-03-30T00:00:00Z"}
+    ],
+    "updatedAt":"2026-03-30T00:00:00Z"
+  }
+]

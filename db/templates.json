@@ -1,0 +1,13 @@
+[
+  {
+    "id":"tpl-system-1",
+    "name":"General system prompt",
+    "description":"Base instruction block for the main orchestrator.",
+    "currentVersion":2,
+    "versions":[
+      {"version":1,"content":"You are the orchestration controller. Route work to the right tool.","updatedAt":"2026-03-26T00:00:00Z"},
+      {"version":2,"content":"You are the orchestration controller. Route work to the right tool, preserve user intent, and return concise grounded answers.","updatedAt":"2026-03-27T00:00:00Z"}
+    ],
+    "updatedAt":"2026-03-27T00:00:00Z"
+  }
+]
