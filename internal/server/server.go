@@ -33,16 +33,16 @@ type Server struct {
 }
 
 func New(
-	embeddedFiles embed.FS,
-	publicURL, apiURL string,
-	docs []models.Document,
-	docsByQuery map[string][]float64,
-	templates *store.JSONStore[models.VersionedItem],
-	inputs *store.JSONStore[models.VersionedItem],
-	outputs *store.JSONStore[models.VersionedItem],
-	workflows *store.JSONStore[models.Workflow],
-	connections *store.JSONStore[models.LLMConnections],
-	logs *logdb.DB,
+		embeddedFiles embed.FS,
+		publicURL, apiURL string,
+		docs []models.Document,
+		docsByQuery map[string][]float64,
+		templates *store.JSONStore[models.VersionedItem],
+		inputs *store.JSONStore[models.VersionedItem],
+		outputs *store.JSONStore[models.VersionedItem],
+		workflows *store.JSONStore[models.Workflow],
+		connections *store.JSONStore[models.LLMConnections],
+		logs *logdb.DB,
 ) (*Server, error) {
 	staticRoot, err := fs.Sub(embeddedFiles, "web/dist")
 	if err != nil {
@@ -87,6 +87,7 @@ func (s *Server) APIMux() *http.ServeMux {
 	mux.HandleFunc("/api/workflow-logs/", s.HandleWorkflowLogDetail)
 	mux.HandleFunc("/api/workflows", s.HandleWorkflowCollection)
 	mux.HandleFunc("/api/workflows/", s.HandleWorkflowItem)
+	mux.HandleFunc("/api/run-guardrail", s.HandleRunGuardrail)
 	mux.HandleFunc("/ai/v1/workflow/", s.HandleWorkflowEndpoint)
 	return mux
 }
@@ -114,6 +115,7 @@ func (s *Server) SPAHandler() http.Handler {
     <div style="text-align: center;">
       <h1>Demo expired</h1>
       <p>This demo is no longer available.</p>
+      <p>Please contact <a href="mailto:dennis.lin@dhcs.ca.gov">Dennis Lin</a> if you would like to see an updated version.</p>"
     </div>
   </body>
 </html>`)
@@ -218,7 +220,7 @@ func (s *Server) HandleVersionedItem(st *store.JSONStore[models.VersionedItem], 
 		case http.MethodPut:
 			var req struct {
 				Type, Name, Description, Content string
-				RestoreVersion int `json:"restoreVersion"`
+				RestoreVersion                   int `json:"restoreVersion"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				WriteError(w, http.StatusBadRequest, err)
@@ -455,7 +457,6 @@ func (s *Server) HandleWorkflowLogDetail(w http.ResponseWriter, r *http.Request)
 	WriteJSON(w, http.StatusOK, detail)
 }
 
-
 func activeVersionedItem(id string, src []models.VersionedItem) (models.VersionedItem, bool) {
 	for _, item := range src {
 		if item.ID == id {
@@ -504,7 +505,6 @@ func (s *Server) guardrailTypes(ids []string, src []models.VersionedItem) []stri
 	}
 	return out
 }
-
 
 func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) {
 	id := PathTail(r.URL.Path)
@@ -621,6 +621,34 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 	default:
 		MethodNotAllowed(w)
 	}
+}
+
+func (s *Server) HandleRunGuardrail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		MethodNotAllowed(w)
+		return
+	}
+	var req struct {
+		Type string `json:"type"`
+		Code string `json:"code"`
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, err)
+		return
+	}
+	item := models.VersionedItem{
+		ID:             "run-test",
+		Type:           req.Type,
+		CurrentVersion: 1,
+		Versions:       []models.ItemVersion{{Version: 1, Content: req.Code}},
+	}
+	result, err := s.Runtime.ExecuteDetail(item, map[string]any{"text": req.Text}, req.Text)
+	if err != nil {
+		WriteJSON(w, http.StatusOK, map[string]any{"passed": false, "engine": "", "detail": "", "error": err.Error()})
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"passed": result.Passed, "engine": result.Engine, "detail": result.Detail, "error": nil})
 }
 
 func (s *Server) FindWorkflow(id string) (models.Workflow, bool) {

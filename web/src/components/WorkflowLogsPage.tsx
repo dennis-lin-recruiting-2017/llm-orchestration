@@ -3,6 +3,8 @@ import type { WorkflowLogDetail, WorkflowLogListItem } from "../lib/types"
 type Props = {
   logs: WorkflowLogListItem[]
   selected: WorkflowLogDetail | null
+  onRefresh?: () => void
+  onSelect?: (requestId: string) => void
 }
 
 function GuardrailRows({ items }: { items: WorkflowLogDetail["inputGuardrails"] }) {
@@ -24,13 +26,13 @@ function GuardrailRows({ items }: { items: WorkflowLogDetail["inputGuardrails"] 
   )
 }
 
-export function WorkflowLogsPage({ logs, selected }: Props) {
+export function WorkflowLogsPage({ logs, selected, onRefresh, onSelect }: Props) {
   return (
     <main className="log-layout">
       <section className="card scroll-pane">
         <div className="section-row">
           <h2>Workflow logs</h2>
-          <button>Refresh</button>
+          <button onClick={onRefresh}>Refresh</button>
         </div>
 
         <table className="log-table">
@@ -44,7 +46,7 @@ export function WorkflowLogsPage({ logs, selected }: Props) {
           </thead>
           <tbody>
             {logs.map((item) => (
-              <tr className={`log-row ${selected?.requestId === item.requestId ? "active" : ""}`} key={item.requestId}>
+              <tr className={`log-row ${selected?.requestId === item.requestId ? "active" : ""}`} key={item.requestId} onClick={() => onSelect?.(item.requestId)}>
                 <td className="mono">{item.requestId}</td>
                 <td>{item.requestTimestamp}</td>
                 <td>{item.promptTemplateName || item.promptTemplateId || ""}</td>

@@ -10,8 +10,6 @@ export function DrawerNav({ route, onNavigate }: Props) {
   return (
     <aside className="drawer">
       <h2>LLM Orchestration</h2>
-      <div className="meta">Navigation drawer with 2-level nesting</div>
-
       {drawerNavigation.map((group) => (
         <div className="drawer-group" key={group.label}>
           {group.path ? (

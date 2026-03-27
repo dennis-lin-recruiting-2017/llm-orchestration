@@ -1,22 +1,29 @@
 import { useEffect, useMemo, useState } from "react"
+import { getJSON } from "./lib/api"
+import { AboutPage } from "./components/Home/AboutPage"
 import { AppShell } from "./components/AppShell"
 import { DrawerNav } from "./components/DrawerNav"
+import { GuardrailsJavascriptPage } from "./components/Home/GuardrailsJavascriptPage"
+import { GuardrailsLLMPage } from "./components/Home/GuardrailsLLMPage"
+import { GuardrailsPythonPage } from "./components/Home/GuardrailsPythonPage"
+import { HowToPromptTemplatesPage } from "./components/Home/HowToPromptTemplatesPage"
+import { HowToWorkflowLogsPage } from "./components/Home/HowToWorkflowLogsPage"
+import { HowToWorkflowsPage } from "./components/Home/HowToWorkflowsPage"
 import { LLMConnectionsPage } from "./components/LLMConnectionsPage"
-import { SampleLandingPage } from "./components/SampleLandingPage"
+import { OverviewPage } from "./components/Home/OverviewPage"
 import { TopNav } from "./components/TopNav"
 import { VersionedEditorPage } from "./components/VersionedEditorPage"
-import { WorkflowLogsPage } from "./components/WorkflowLogsPage"
+import { WorkflowLogViewerPage } from "./components/WorkflowLogViewerPage"
 import { WorkflowsPage } from "./components/WorkflowsPage"
 import { WorkspacePage } from "./components/WorkspacePage"
 import { normalizeRoute } from "./lib/routes"
 import type {
+  AppConfig,
   AppRoute,
   Document,
   LLMConnections,
   VersionedItem,
   Workflow,
-  WorkflowLogDetail,
-  WorkflowLogListItem,
 } from "./lib/types"
 
 function currentRoute(): AppRoute {
@@ -40,13 +47,18 @@ const demoWorkflows: Workflow[] = [
   { id: "1f0f2b3c-9c52-6a10-a111-1234567890ab", name: "Default assistant workflow", description: "Starter workflow wiring together guardrails and the main prompt.", promptTemplateId: "tpl-system-1", inputGuardrailIds: ["igr-1"], outputGuardrailIds: ["ogr-1"], updatedAt: "2026-03-30T00:00:00Z" },
 ]
 const demoConnections: LLMConnections = { provider: "LMStudio", lmstudio: { baseURL: "http://127.0.0.1:1234", model: "local-model" }, ollama: { baseURL: "http://127.0.0.1:11434", model: "llama3.1" } }
-const demoLogList: WorkflowLogListItem[] = [{ requestId: "req-1743010001", requestTimestamp: "2026-03-26T19:12:10Z", promptTemplateId: "tpl-system-1", promptTemplateName: "General system prompt", promptTemplateVersion: 2 }]
-const demoLogDetail: WorkflowLogDetail = { requestId: "req-1743010001", workflowId: "1f0f2b3c-9c52-6a10-a111-1234567890ab", promptTemplateId: "tpl-system-1", promptTemplateName: "General system prompt", promptTemplateVersion: 2, requestTimestamp: "2026-03-26T19:12:10Z", requestBody: '{"text":"Explain retrieval-augmented generation"}', inputGuardrails: [], outputGuardrails: [], responseBody: '{"status":"accepted"}', responseTimestamp: "2026-03-26T19:12:11Z" }
 
 export default function App() {
   const initialRoute = useMemo<AppRoute>(() => currentRoute(), [])
   const [route, setRoute] = useState<AppRoute>(initialRoute)
   const [query, setQuery] = useState("orchestration")
+  const [apiBaseURL, setApiBaseURL] = useState("http://127.0.0.1:8081")
+
+  useEffect(() => {
+    getJSON<AppConfig>("/config.json")
+      .then((cfg) => setApiBaseURL(cfg.apiBaseURL))
+      .catch(() => {/* keep default */})
+  }, [])
 
   useEffect(() => {
     const onPopState = () => setRoute(currentRoute())
@@ -60,29 +72,52 @@ export default function App() {
     setRoute(path)
   }
 
-  let content
-  if (route === "/" || route.startsWith("/sample/")) {
-    content = (
-      <div className="app-shell">
-        <DrawerNav route={route} onNavigate={onNavigate} />
-        <SampleLandingPage route={route} />
-      </div>
-    )
+  // Pages rendered inside the Home drawer layout
+  const isHomeTab = route === "/" || route.startsWith("/how-to-use/") || route === "/about"
+
+  let page
+  if (route === "/") {
+    page = <OverviewPage />
+  } else if (route === "/how-to-use/prompt-templates") {
+    page = <HowToPromptTemplatesPage />
+  } else if (route === "/how-to-use/guardrails-llm") {
+    page = <GuardrailsLLMPage />
+  } else if (route === "/how-to-use/guardrails-javascript") {
+    page = <GuardrailsJavascriptPage />
+  } else if (route === "/how-to-use/guardrails-python") {
+    page = <GuardrailsPythonPage />
+  } else if (route === "/how-to-use/workflows") {
+    page = <HowToWorkflowsPage />
+  } else if (route === "/how-to-use/workflow-logs") {
+    page = <HowToWorkflowLogsPage />
+  } else if (route === "/about") {
+    page = <AboutPage />
   } else if (route === "/workspace") {
-    content = <WorkspacePage cfg={{ webBaseURL: window.location.origin, apiBaseURL: "http://127.0.0.1:8081" }} query={query} mode="vector" loading={false} results={demoDocuments} documents={demoDocuments} onQueryChange={setQuery} onSearch={() => undefined} onChip={setQuery} />
+    page = <WorkspacePage cfg={{ webBaseURL: window.location.origin, apiBaseURL: "http://127.0.0.1:8081" }} query={query} mode="vector" loading={false} results={demoDocuments} documents={demoDocuments} onQueryChange={setQuery} onSearch={() => undefined} onChip={setQuery} />
   } else if (route === "/prompt-templates") {
-    content = <VersionedEditorPage title="Prompt templates" typed={false} status="Click a version and confirm to restore it as active." items={demoTemplates} active={demoTemplates[0]} />
+    page = <VersionedEditorPage apiBaseURL={apiBaseURL} apiPath="/api/templates" title="Prompt templates" typed={false} />
   } else if (route === "/input-guardrails") {
-    content = <VersionedEditorPage title="Input guardrails" typed={true} status="Click a version and confirm to restore it as active." items={demoInputs} active={demoInputs[0]} />
+    page = <VersionedEditorPage apiBaseURL={apiBaseURL} apiPath="/api/input-guardrails" title="Input guardrails" typed={true} />
   } else if (route === "/output-guardrails") {
-    content = <VersionedEditorPage title="Output guardrails" typed={true} status="Click a version and confirm to restore it as active." items={demoOutputs} active={demoOutputs[0]} />
+    page = <VersionedEditorPage apiBaseURL={apiBaseURL} apiPath="/api/output-guardrails" title="Output guardrails" typed={true} />
   } else if (route === "/workflows") {
-    content = <WorkflowsPage workflows={demoWorkflows} active={demoWorkflows[0]} inputs={demoInputs} outputs={demoOutputs} templates={demoTemplates} apiBaseURL="http://127.0.0.1:8081" status="Source demo view" />
+    page = <WorkflowsPage workflows={demoWorkflows} active={demoWorkflows[0]} inputs={demoInputs} outputs={demoOutputs} templates={demoTemplates} apiBaseURL={apiBaseURL} status="Source demo view" />
   } else if (route === "/llm-connections") {
-    content = <LLMConnectionsPage connections={demoConnections} />
+    page = <LLMConnectionsPage connections={demoConnections} />
   } else {
-    content = <WorkflowLogsPage logs={demoLogList} selected={demoLogDetail} />
+    page = <WorkflowLogViewerPage apiBaseURL={apiBaseURL} />
   }
 
-  return <AppShell route={route} onNavigate={onNavigate} topNav={<TopNav route={route} onNavigate={onNavigate} />}>{content}</AppShell>
+  const content = isHomeTab ? (
+    <div className="app-shell">
+      <DrawerNav route={route} onNavigate={onNavigate} />
+      {page}
+    </div>
+  ) : page
+
+  return (
+    <AppShell route={route} onNavigate={onNavigate} topNav={<TopNav route={route} onNavigate={onNavigate} />}>
+      {content}
+    </AppShell>
+  )
 }

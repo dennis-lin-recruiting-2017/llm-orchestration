@@ -1,0 +1,9 @@
+{
+  "name": "llm-orchestration",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "trap 'kill $(jobs -p) 2>/dev/null' EXIT; (cd web && npm install --silent && npm run dev) & go run . ; wait",
+    "build": "(cd web && npm install --silent && npm run build) && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o build/llm-orchestration ./"
+  }
+}

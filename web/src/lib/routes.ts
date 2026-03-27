@@ -9,12 +9,13 @@ export const APP_ROUTES: AppRoute[] = [
   "/workflows",
   "/llm-connections",
   "/workflow-logs",
-  "/sample/dashboard",
-  "/sample/getting-started",
-  "/sample/chat-playground",
-  "/sample/retrieval-demo",
-  "/sample/admin-users",
-  "/sample/admin-audit",
+  "/how-to-use/prompt-templates",
+  "/how-to-use/guardrails-llm",
+  "/how-to-use/guardrails-javascript",
+  "/how-to-use/guardrails-python",
+  "/how-to-use/workflows",
+  "/how-to-use/workflow-logs",
+  "/about",
 ]
 
 export function normalizeRoute(pathname: string): AppRoute {
