@@ -1,6 +1,7 @@
 package llm_test
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"strings"
@@ -54,7 +55,10 @@ func TestLMStudioInference(t *testing.T) {
 		{Role: "user", Content: "What is 2+2? Reply with only the number."},
 	}
 
-	reply, err := llm.Chat(baseURL, model, messages)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	reply, err := llm.Chat(ctx, baseURL, model, messages)
 	if err != nil {
 		t.Fatalf("Chat() error: %v", err)
 	}

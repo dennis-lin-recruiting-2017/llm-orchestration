@@ -67,14 +67,14 @@ export function WorkflowLogsPage({ logs, selected, onRefresh, onSelect }: Props)
             <div className="meta mono">{selected.requestId}</div>
 
             <details className="collapse">
-              <summary>{"{{query}}"} value</summary>
+              <summary>RAG Query</summary>
               <div className="collapse-body">
                 <div className="pre">{selected.rawQuery || selected.query || "(none)"}</div>
               </div>
             </details>
 
             <details className="collapse">
-              <summary>{"{{text}}"} value</summary>
+              <summary>User prompt</summary>
               <div className="collapse-body">
                 <div className="pre">{selected.text || "(none)"}</div>
               </div>

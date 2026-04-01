@@ -26,8 +26,8 @@ export function VersionedEditorPage({ apiBaseURL, apiPath, title, typed }: Props
   const [items, setItems] = useState<VersionedItem[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [selectedType, setSelectedType] = useState<string>("LLM")
-  const [testInput, setTestInput] = useState(() => localStorage.getItem(`${apiPath}:testInput`) ?? "")
-  const [query, setQuery] = useState(() => localStorage.getItem(`${apiPath}:query`) ?? "")
+  const [testInput, setTestInput] = useState("")
+  const [query, setQuery] = useState("")
   const [queryResults, setQueryResults] = useState<string | null>(null)
   const [runResult, setRunResult] = useState<RunResult | null>(null)
   const [templateResult, setTemplateResult] = useState<TemplateResult | null>(null)
@@ -57,11 +57,17 @@ export function VersionedEditorPage({ apiBaseURL, apiPath, title, typed }: Props
     setRunResult(null)
     setTemplateResult(null)
     setQueryResults(null)
+    setTestInput(active?.id ? (localStorage.getItem(`${apiPath}:${active.id}:testInput`) ?? "") : "")
+    setQuery(active?.id ? (localStorage.getItem(`${apiPath}:${active.id}:query`) ?? "") : "")
   }, [active?.id, latest])
 
   useEffect(() => { setQueryResults(null) }, [query])
-  useEffect(() => { localStorage.setItem(`${apiPath}:testInput`, testInput) }, [apiPath, testInput])
-  useEffect(() => { localStorage.setItem(`${apiPath}:query`, query) }, [apiPath, query])
+  useEffect(() => {
+    if (activeId) localStorage.setItem(`${apiPath}:${activeId}:testInput`, testInput)
+  }, [apiPath, activeId, testInput])
+  useEffect(() => {
+    if (activeId) localStorage.setItem(`${apiPath}:${activeId}:query`, query)
+  }, [apiPath, activeId, query])
 
   const types = ["LLM", "Regex", "CustomJavaScript", "CustomPython"]
 
@@ -207,7 +213,14 @@ export function VersionedEditorPage({ apiBaseURL, apiPath, title, typed }: Props
 
       <section className="card">
         <div className="section-row">
-          <h2>Edit</h2>
+          <h2>
+            Edit
+            {active
+              ? <small className="meta" style={{ marginLeft: "0.5rem" }}>
+                  {codeContent !== latest ? "New" : `v${active.currentVersion}`}
+                </small>
+              : null}
+          </h2>
           <div className="inline-actions">
             <button type="button" onClick={onSave}>Save</button>
             <button type="button" onClick={onDelete}>Delete</button>

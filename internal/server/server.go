@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -557,6 +558,9 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 			"updatedAt":             wf.UpdatedAt,
 		})
 	case http.MethodPost:
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			WriteError(w, http.StatusBadRequest, err)
@@ -576,10 +580,12 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 		}
 		var resolvedQuery string
 		var searchDurationMs int64
+		ragResultSlice := []string{}
 		if queryTerm != "" {
 			searchStart := time.Now()
 			docs := s.searchDocs(queryTerm)
 			searchDurationMs = time.Since(searchStart).Microseconds()
+			ragResultSlice = searchResultStrings(docs)
 			if formatted := formatSearchResults(docs); formatted != "" {
 				resolvedQuery = formatted
 			} else {
@@ -601,15 +607,18 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 		inputPayload["text"] = req.Text
 		inputPayload["query"] = resolvedQuery
 
+		inputGuardrailDebug := make(map[string]models.GuardrailDebugResult)
 		for _, gr := range selectedGuardrails(wf.InputGuardrailIDs, inputs) {
-			passed, engine, err := s.Runtime.Execute(gr, inputPayload, "")
-			detail := "ok"
+			grStart := time.Now()
+			result, err := s.Runtime.ExecuteDetail(ctx, gr, inputPayload, "")
+			grUs := time.Since(grStart).Microseconds()
+			entry := models.GuardrailDebugResult{Passed: result.Passed, Engine: result.Engine, Detail: result.Detail, DurationMs: float64(grUs) / 1000.0}
 			if err != nil {
-				passed = false
-				detail = err.Error()
+				entry = models.GuardrailDebugResult{Passed: false, Engine: result.Engine, Detail: err.Error(), DurationMs: float64(grUs) / 1000.0}
 			}
+			inputGuardrailDebug[gr.Name] = entry
 			if s.LogDB != nil {
-				if err := s.LogDB.InsertInputGuardrailResult(requestID, wf.ID, gr.ID, gr.Type, passed, engine, detail); err != nil {
+				if err := s.LogDB.InsertInputGuardrailResult(requestID, wf.ID, gr.ID, gr.Type, entry.Passed, entry.Engine, entry.Detail); err != nil {
 					log.Printf("log input guardrail result: %v", err)
 				}
 			}
@@ -629,7 +638,7 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 			finalPrompt = strings.ReplaceAll(promptContent, "{{text}}", req.Text)
 			finalPrompt = strings.ReplaceAll(finalPrompt, "{{query}}", resolvedQuery)
 			inferenceStart := time.Now()
-			result, err := llm.Chat(conn.BaseURL, conn.Model, []llm.Message{
+			result, err := llm.Chat(ctx, conn.BaseURL, conn.Model, []llm.Message{
 				{Role: "user", Content: finalPrompt},
 			})
 			inferenceDurationUs = time.Since(inferenceStart).Microseconds()
@@ -645,6 +654,23 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
+		outputGuardrailDebug := make(map[string]models.GuardrailDebugResult)
+		for _, gr := range selectedGuardrails(wf.OutputGuardrailIDs, outputs) {
+			grStart := time.Now()
+			result, err := s.Runtime.ExecuteDetail(ctx, gr, inputPayload, llmOutput)
+			grUs := time.Since(grStart).Microseconds()
+			entry := models.GuardrailDebugResult{Passed: result.Passed, Engine: result.Engine, Detail: result.Detail, DurationMs: float64(grUs) / 1000.0}
+			if err != nil {
+				entry = models.GuardrailDebugResult{Passed: false, Engine: result.Engine, Detail: err.Error(), DurationMs: float64(grUs) / 1000.0}
+			}
+			outputGuardrailDebug[gr.Name] = entry
+			if s.LogDB != nil {
+				if err := s.LogDB.InsertOutputGuardrailResult(requestID, wf.ID, gr.ID, gr.Type, entry.Passed, entry.Engine, entry.Detail); err != nil {
+					log.Printf("log output guardrail result: %v", err)
+				}
+			}
+		}
+
 		resp := models.WorkflowInvokeResponse{
 			WorkflowID:            wf.ID,
 			PromptTemplateID:      wf.PromptTemplateID,
@@ -656,20 +682,17 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 			Status:                "accepted",
 			Echo:                  req.Text,
 			LLMOutput:             llmOutput,
-		}
-
-		for _, gr := range selectedGuardrails(wf.OutputGuardrailIDs, outputs) {
-			passed, engine, err := s.Runtime.Execute(gr, inputPayload, llmOutput)
-			detail := "ok"
-			if err != nil {
-				passed = false
-				detail = err.Error()
-			}
-			if s.LogDB != nil {
-				if err := s.LogDB.InsertOutputGuardrailResult(requestID, wf.ID, gr.ID, gr.Type, passed, engine, detail); err != nil {
-					log.Printf("log output guardrail result: %v", err)
-				}
-			}
+			Metadata: models.WorkflowMetadata{
+				QueryTimeMs:       float64(searchDurationMs) / 1000.0,
+				InferenceTimeMs:   float64(inferenceDurationUs) / 1000.0,
+				Model:             inferenceModel,
+				InferenceEndpoint: inferenceEndpoint,
+			},
+			Debug: models.WorkflowDebug{
+				RAGResults:       ragResultSlice,
+				InputGuardrails:  inputGuardrailDebug,
+				OutputGuardrails: outputGuardrailDebug,
+			},
 		}
 
 		responseBytes, err := json.Marshal(resp)
@@ -714,7 +737,7 @@ func (s *Server) HandleRunTemplate(w http.ResponseWriter, r *http.Request) {
 
 	prompt := strings.ReplaceAll(req.Code, "{{text}}", req.Text)
 	prompt = strings.ReplaceAll(prompt, "{{query}}", req.Query)
-	output, err := llm.Chat(conn.BaseURL, conn.Model, []llm.Message{
+	output, err := llm.Chat(r.Context(), conn.BaseURL, conn.Model, []llm.Message{
 		{Role: "user", Content: prompt},
 	})
 	if err != nil {
@@ -744,7 +767,7 @@ func (s *Server) HandleRunGuardrail(w http.ResponseWriter, r *http.Request) {
 		CurrentVersion: 1,
 		Versions:       []models.ItemVersion{{Version: 1, Content: req.Code}},
 	}
-	result, err := s.Runtime.ExecuteDetail(item, map[string]any{"text": req.Text}, req.Text)
+	result, err := s.Runtime.ExecuteDetail(r.Context(), item, map[string]any{"text": req.Text}, req.Text)
 	if err != nil {
 		WriteJSON(w, http.StatusOK, map[string]any{"passed": false, "engine": "", "detail": "", "error": err.Error()})
 		return
@@ -785,16 +808,20 @@ func (s *Server) searchDocs(q string) []models.Document {
 	return results
 }
 
-// formatSearchResults converts documents into a numbered list matching the frontend format.
-func formatSearchResults(docs []models.Document) string {
-	if len(docs) == 0 {
-		return ""
-	}
-	parts := make([]string, len(docs))
+// searchResultStrings converts documents into a slice of formatted strings,
+// one entry per document, matching the frontend fetchFormattedSearchResults format.
+func searchResultStrings(docs []models.Document) []string {
+	out := make([]string, len(docs))
 	for i, d := range docs {
-		parts[i] = fmt.Sprintf("[%d] %s\n%s", i+1, d.Title, d.Body)
+		out[i] = fmt.Sprintf("[%d] %s\n%s", i+1, d.Title, d.Body)
 	}
-	return strings.Join(parts, "\n\n")
+	return out
+}
+
+// formatSearchResults joins the per-document strings into a single block
+// suitable for substituting into a prompt template.
+func formatSearchResults(docs []models.Document) string {
+	return strings.Join(searchResultStrings(docs), "\n\n")
 }
 
 func (s *Server) FindWorkflow(id string) (models.Workflow, bool) {

@@ -1,6 +1,7 @@
 package guardrails
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -13,7 +14,7 @@ import (
 )
 
 type Executor interface {
-	Execute(item models.VersionedItem, input map[string]any, output string) (bool, string, error)
+	Execute(ctx context.Context, item models.VersionedItem, input map[string]any, output string) (bool, string, error)
 }
 
 // Runtime executes guardrails of all supported types.  ActiveLLMConn is called
@@ -23,7 +24,7 @@ type Runtime struct {
 	ActiveLLMConn func() (models.ProviderConnection, bool)
 }
 
-func (rt Runtime) Execute(item models.VersionedItem, input map[string]any, output string) (bool, string, error) {
+func (rt Runtime) Execute(ctx context.Context, item models.VersionedItem, input map[string]any, output string) (bool, string, error) {
 	code := activeCode(item)
 	switch item.Type {
 	case "Regex":
@@ -34,7 +35,7 @@ func (rt Runtime) Execute(item models.VersionedItem, input map[string]any, outpu
 		return executeGPython(code, input, output)
 	case "LLM", "":
 		text := textForLLM(input, output)
-		return rt.executeLLM(code, text)
+		return rt.executeLLM(ctx, code, text)
 	default:
 		return false, "", fmt.Errorf("unsupported guardrail type: %s", item.Type)
 	}
@@ -49,7 +50,7 @@ type RunResult struct {
 
 // ExecuteDetail runs the guardrail and returns a RunResult with a detail string
 // describing the raw output — useful for the editor's test-run feature.
-func (rt Runtime) ExecuteDetail(item models.VersionedItem, input map[string]any, output string) (RunResult, error) {
+func (rt Runtime) ExecuteDetail(ctx context.Context, item models.VersionedItem, input map[string]any, output string) (RunResult, error) {
 	code := activeCode(item)
 	switch item.Type {
 	case "Regex":
@@ -92,7 +93,7 @@ func (rt Runtime) ExecuteDetail(item models.VersionedItem, input map[string]any,
 		return RunResult{Passed: passed, Engine: "gpython", Detail: r.Raw}, nil
 	case "LLM", "":
 		text := textForLLM(input, output)
-		passed, engine, err := rt.executeLLM(code, text)
+		passed, engine, err := rt.executeLLM(ctx, code, text)
 		if err != nil {
 			return RunResult{}, err
 		}
@@ -147,7 +148,7 @@ func textForLLM(input map[string]any, output string) string {
 // configured LLM, and interprets the reply as a boolean verdict.
 // Replies of "true", "yes", "pass", or "1" (case-insensitive) are treated as
 // passing; everything else is treated as failing.
-func (rt Runtime) executeLLM(prompt, text string) (bool, string, error) {
+func (rt Runtime) executeLLM(ctx context.Context, prompt, text string) (bool, string, error) {
 	if rt.ActiveLLMConn == nil {
 		return false, "llm", fmt.Errorf("no LLM connection configured")
 	}
@@ -157,7 +158,7 @@ func (rt Runtime) executeLLM(prompt, text string) (bool, string, error) {
 	}
 
 	filled := strings.ReplaceAll(prompt, "{{text}}", text)
-	reply, err := llm.Chat(conn.BaseURL, conn.Model, []llm.Message{
+	reply, err := llm.Chat(ctx, conn.BaseURL, conn.Model, []llm.Message{
 		{Role: "user", Content: filled},
 	})
 	if err != nil {

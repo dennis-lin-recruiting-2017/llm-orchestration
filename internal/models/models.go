@@ -44,17 +44,42 @@ type WorkflowInvokeRequest struct {
 	RawQuery string         `json:"rawQuery"`
 }
 
+// WorkflowMetadata contains timing and connection info for a single invocation.
+type WorkflowMetadata struct {
+	QueryTimeMs       float64 `json:"queryTimeMs"`
+	InferenceTimeMs   float64 `json:"inferenceTimeMs"`
+	Model             string  `json:"model"`
+	InferenceEndpoint string  `json:"inferenceEndpoint"`
+}
+
+// GuardrailDebugResult is the per-guardrail entry in the debug section.
+type GuardrailDebugResult struct {
+	Passed      bool    `json:"passed"`
+	Engine      string  `json:"engine"`
+	Detail      string  `json:"detail"`
+	DurationMs  float64 `json:"durationMs"`
+}
+
+// WorkflowDebug holds diagnostic data that is useful for troubleshooting.
+type WorkflowDebug struct {
+	RAGResults       []string                        `json:"ragResults"`
+	InputGuardrails  map[string]GuardrailDebugResult `json:"inputGuardrails"`
+	OutputGuardrails map[string]GuardrailDebugResult `json:"outputGuardrails"`
+}
+
 type WorkflowInvokeResponse struct {
-	WorkflowID            string   `json:"workflowId"`
-	PromptTemplateID      string   `json:"promptTemplateId"`
-	PromptTemplateVersion int      `json:"promptTemplateVersion,omitempty"`
-	InputGuardrails       []string `json:"inputGuardrails"`
-	OutputGuardrails      []string `json:"outputGuardrails"`
-	InputTypes            []string `json:"inputGuardrailTypes,omitempty"`
-	OutputTypes           []string `json:"outputGuardrailTypes,omitempty"`
-	Status                string   `json:"status"`
-	Echo                  string   `json:"echo"`
-	LLMOutput             string   `json:"llmOutput"`
+	WorkflowID            string           `json:"workflowId"`
+	PromptTemplateID      string           `json:"promptTemplateId"`
+	PromptTemplateVersion int              `json:"promptTemplateVersion,omitempty"`
+	InputGuardrails       []string         `json:"inputGuardrails"`
+	OutputGuardrails      []string         `json:"outputGuardrails"`
+	InputTypes            []string         `json:"inputGuardrailTypes,omitempty"`
+	OutputTypes           []string         `json:"outputGuardrailTypes,omitempty"`
+	Status                string           `json:"status"`
+	Echo                  string           `json:"echo"`
+	LLMOutput             string           `json:"llmOutput"`
+	Metadata              WorkflowMetadata `json:"metadata"`
+	Debug                 WorkflowDebug    `json:"debug"`
 }
 
 type AppConfig struct {
