@@ -618,7 +618,7 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 			}
 			inputGuardrailDebug[gr.Name] = entry
 			if s.LogDB != nil {
-				if err := s.LogDB.InsertInputGuardrailResult(requestID, wf.ID, gr.ID, gr.Type, entry.Passed, entry.Engine, entry.Detail); err != nil {
+				if err := s.LogDB.InsertInputGuardrailResult(requestID, wf.ID, gr.ID, gr.Type, entry.Passed, entry.Engine, entry.Detail, entry.DurationMs); err != nil {
 					log.Printf("log input guardrail result: %v", err)
 				}
 			}
@@ -665,7 +665,7 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 			}
 			outputGuardrailDebug[gr.Name] = entry
 			if s.LogDB != nil {
-				if err := s.LogDB.InsertOutputGuardrailResult(requestID, wf.ID, gr.ID, gr.Type, entry.Passed, entry.Engine, entry.Detail); err != nil {
+				if err := s.LogDB.InsertOutputGuardrailResult(requestID, wf.ID, gr.ID, gr.Type, entry.Passed, entry.Engine, entry.Detail, entry.DurationMs); err != nil {
 					log.Printf("log output guardrail result: %v", err)
 				}
 			}

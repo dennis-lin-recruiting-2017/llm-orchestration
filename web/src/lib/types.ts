@@ -59,6 +59,7 @@ export type GuardrailLogEntry = {
   passed: boolean
   engine: string
   detail: string
+  durationMs: number
   createdAt: string
 }
 

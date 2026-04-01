@@ -113,6 +113,7 @@ func migrate(db *sql.DB) error {
 			created_at TEXT NOT NULL
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_input_guardrail_logs_request_id ON workflow_input_guardrail_logs(request_id);`,
+		`ALTER TABLE workflow_input_guardrail_logs ADD COLUMN duration_ms REAL NOT NULL DEFAULT 0;`,
 		`CREATE TABLE IF NOT EXISTS workflow_output_guardrail_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			request_id TEXT NOT NULL,
@@ -125,6 +126,7 @@ func migrate(db *sql.DB) error {
 			created_at TEXT NOT NULL
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_output_guardrail_logs_request_id ON workflow_output_guardrail_logs(request_id);`,
+		`ALTER TABLE workflow_output_guardrail_logs ADD COLUMN duration_ms REAL NOT NULL DEFAULT 0;`,
 	}
 	for _, stmt := range stmts {
 		if _, err := db.Exec(stmt); err != nil && !ignoreDuplicateColumn(err) {
@@ -173,22 +175,22 @@ func (d *DB) InsertResponse(requestID, workflowID string, statusCode int, body s
 	return err
 }
 
-func (d *DB) InsertInputGuardrailResult(requestID, workflowID, guardrailID, guardrailType string, passed bool, engine, detail string) error {
+func (d *DB) InsertInputGuardrailResult(requestID, workflowID, guardrailID, guardrailType string, passed bool, engine, detail string, durationMs float64) error {
 	_, err := d.SQL.Exec(
 		`INSERT INTO workflow_input_guardrail_logs
-		(request_id, workflow_id, guardrail_id, guardrail_type, passed, engine, detail, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		requestID, workflowID, guardrailID, guardrailType, boolToInt(passed), engine, detail, time.Now().UTC().Format(time.RFC3339Nano),
+		(request_id, workflow_id, guardrail_id, guardrail_type, passed, engine, detail, duration_ms, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		requestID, workflowID, guardrailID, guardrailType, boolToInt(passed), engine, detail, durationMs, time.Now().UTC().Format(time.RFC3339Nano),
 	)
 	return err
 }
 
-func (d *DB) InsertOutputGuardrailResult(requestID, workflowID, guardrailID, guardrailType string, passed bool, engine, detail string) error {
+func (d *DB) InsertOutputGuardrailResult(requestID, workflowID, guardrailID, guardrailType string, passed bool, engine, detail string, durationMs float64) error {
 	_, err := d.SQL.Exec(
 		`INSERT INTO workflow_output_guardrail_logs
-		(request_id, workflow_id, guardrail_id, guardrail_type, passed, engine, detail, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		requestID, workflowID, guardrailID, guardrailType, boolToInt(passed), engine, detail, time.Now().UTC().Format(time.RFC3339Nano),
+		(request_id, workflow_id, guardrail_id, guardrail_type, passed, engine, detail, duration_ms, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		requestID, workflowID, guardrailID, guardrailType, boolToInt(passed), engine, detail, durationMs, time.Now().UTC().Format(time.RFC3339Nano),
 	)
 	return err
 }
@@ -219,7 +221,7 @@ func scanGuardrailRows(rows *sql.Rows) ([]models.GuardrailLogEntry, error) {
 	for rows.Next() {
 		var item models.GuardrailLogEntry
 		var passedInt int
-		if err := rows.Scan(&item.RequestID, &item.WorkflowID, &item.GuardrailID, &item.GuardrailType, &passedInt, &item.Engine, &item.Detail, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.RequestID, &item.WorkflowID, &item.GuardrailID, &item.GuardrailType, &passedInt, &item.Engine, &item.Detail, &item.DurationMs, &item.CreatedAt); err != nil {
 			return nil, err
 		}
 		item.Passed = intToBool(passedInt)
@@ -279,7 +281,7 @@ func (d *DB) GetWorkflowLogDetail(requestID string) (models.WorkflowLogDetail, e
 	_ = statusCode
 
 	inRows, err := d.SQL.Query(`
-		SELECT request_id, workflow_id, guardrail_id, guardrail_type, passed, engine, detail, created_at
+		SELECT request_id, workflow_id, guardrail_id, guardrail_type, passed, engine, detail, duration_ms, created_at
 		FROM workflow_input_guardrail_logs
 		WHERE request_id = ?
 		ORDER BY id ASC`, requestID)
@@ -293,7 +295,7 @@ func (d *DB) GetWorkflowLogDetail(requestID string) (models.WorkflowLogDetail, e
 	}
 
 	outRows, err := d.SQL.Query(`
-		SELECT request_id, workflow_id, guardrail_id, guardrail_type, passed, engine, detail, created_at
+		SELECT request_id, workflow_id, guardrail_id, guardrail_type, passed, engine, detail, duration_ms, created_at
 		FROM workflow_output_guardrail_logs
 		WHERE request_id = ?
 		ORDER BY id ASC`, requestID)

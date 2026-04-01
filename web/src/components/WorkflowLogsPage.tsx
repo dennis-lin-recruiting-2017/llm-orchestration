@@ -18,7 +18,7 @@ function GuardrailRows({ items }: { items: WorkflowLogDetail["inputGuardrails"] 
             {g.guardrailId} <span className="badge">{g.guardrailType}</span>
           </h3>
           <div className={g.passed ? "pass" : "fail"}>{g.passed ? "Passed" : "Failed"}</div>
-          <div className="meta">Engine: {g.engine}</div>
+          <div className="meta">Engine: {g.engine} &nbsp;·&nbsp; {((g.durationMs ?? 0)).toFixed(2)} ms</div>
           <p>{g.detail}</p>
         </article>
       ))}
@@ -67,14 +67,14 @@ export function WorkflowLogsPage({ logs, selected, onRefresh, onSelect }: Props)
             <div className="meta mono">{selected.requestId}</div>
 
             <details className="collapse">
-              <summary>RAG Query</summary>
+              <summary>{"{{query}}"} value</summary>
               <div className="collapse-body">
                 <div className="pre">{selected.rawQuery || selected.query || "(none)"}</div>
               </div>
             </details>
 
             <details className="collapse">
-              <summary>User prompt</summary>
+              <summary>{"{{text}}"} value</summary>
               <div className="collapse-body">
                 <div className="pre">{selected.text || "(none)"}</div>
               </div>

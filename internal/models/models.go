@@ -102,14 +102,15 @@ type LLMConnections struct {
 
 
 type GuardrailLogEntry struct {
-	RequestID     string `json:"requestId"`
-	WorkflowID    string `json:"workflowId"`
-	GuardrailID   string `json:"guardrailId"`
-	GuardrailType string `json:"guardrailType"`
-	Passed        bool   `json:"passed"`
-	Engine        string `json:"engine"`
-	Detail        string `json:"detail"`
-	CreatedAt     string `json:"createdAt"`
+	RequestID     string  `json:"requestId"`
+	WorkflowID    string  `json:"workflowId"`
+	GuardrailID   string  `json:"guardrailId"`
+	GuardrailType string  `json:"guardrailType"`
+	Passed        bool    `json:"passed"`
+	Engine        string  `json:"engine"`
+	Detail        string  `json:"detail"`
+	DurationMs    float64 `json:"durationMs"`
+	CreatedAt     string  `json:"createdAt"`
 }
 
 type WorkflowLogListItem struct {
