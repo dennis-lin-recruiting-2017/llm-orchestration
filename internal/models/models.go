@@ -38,8 +38,10 @@ type Workflow struct {
 }
 
 type WorkflowInvokeRequest struct {
-	Input map[string]any `json:"input"`
-	Text  string         `json:"text"`
+	Input    map[string]any `json:"input"`
+	Text     string         `json:"text"`
+	Query    string         `json:"query"`
+	RawQuery string         `json:"rawQuery"`
 }
 
 type WorkflowInvokeResponse struct {
@@ -52,6 +54,7 @@ type WorkflowInvokeResponse struct {
 	OutputTypes           []string `json:"outputGuardrailTypes,omitempty"`
 	Status                string   `json:"status"`
 	Echo                  string   `json:"echo"`
+	LLMOutput             string   `json:"llmOutput"`
 }
 
 type AppConfig struct {
@@ -93,15 +96,24 @@ type WorkflowLogListItem struct {
 }
 
 type WorkflowLogDetail struct {
-	RequestID            string              `json:"requestId"`
-	WorkflowID           string              `json:"workflowId"`
-	PromptTemplateID     string              `json:"promptTemplateId"`
-	PromptTemplateName   string              `json:"promptTemplateName"`
-	PromptTemplateVersion int                `json:"promptTemplateVersion"`
-	RequestTimestamp     string              `json:"requestTimestamp"`
-	RequestBody          string              `json:"requestBody"`
-	InputGuardrails      []GuardrailLogEntry `json:"inputGuardrails"`
-	OutputGuardrails     []GuardrailLogEntry `json:"outputGuardrails"`
-	ResponseBody         string              `json:"responseBody"`
-	ResponseTimestamp    string              `json:"responseTimestamp"`
+	RequestID             string              `json:"requestId"`
+	WorkflowID            string              `json:"workflowId"`
+	PromptTemplateID      string              `json:"promptTemplateId"`
+	PromptTemplateName    string              `json:"promptTemplateName"`
+	PromptTemplateVersion int                 `json:"promptTemplateVersion"`
+	RequestTimestamp      string              `json:"requestTimestamp"`
+	RequestBody           string              `json:"requestBody"`
+	RawQuery              string              `json:"rawQuery"`
+	Query                 string              `json:"query"`
+	Text                  string              `json:"text"`
+	FinalPrompt           string              `json:"finalPrompt"`
+	LLMOutput             string              `json:"llmOutput"`
+	SearchDurationUs      int64               `json:"searchDurationUs"`
+	InferenceDurationUs   int64               `json:"inferenceDurationUs"`
+	InferenceEndpoint     string              `json:"inferenceEndpoint"`
+	InferenceModel        string              `json:"inferenceModel"`
+	InputGuardrails       []GuardrailLogEntry `json:"inputGuardrails"`
+	OutputGuardrails      []GuardrailLogEntry `json:"outputGuardrails"`
+	ResponseBody          string              `json:"responseBody"`
+	ResponseTimestamp     string              `json:"responseTimestamp"`
 }

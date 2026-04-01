@@ -70,6 +70,15 @@ export type WorkflowLogDetail = {
   promptTemplateVersion: number
   requestTimestamp: string
   requestBody: string
+  rawQuery: string
+  query: string
+  text: string
+  finalPrompt: string
+  llmOutput: string
+  searchDurationUs: number
+  inferenceDurationUs: number
+  inferenceEndpoint: string
+  inferenceModel: string
   inputGuardrails: GuardrailLogEntry[]
   outputGuardrails: GuardrailLogEntry[]
   responseBody: string

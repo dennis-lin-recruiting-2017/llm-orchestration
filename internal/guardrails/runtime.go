@@ -3,10 +3,12 @@ package guardrails
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/dop251/goja"
 
 	"llm-orchestration/internal/interp"
+	"llm-orchestration/internal/llm"
 	"llm-orchestration/internal/models"
 )
 
@@ -14,9 +16,14 @@ type Executor interface {
 	Execute(item models.VersionedItem, input map[string]any, output string) (bool, string, error)
 }
 
-type Runtime struct{}
+// Runtime executes guardrails of all supported types.  ActiveLLMConn is called
+// each time an LLM-type guardrail runs so that the latest saved connection
+// settings are always used.
+type Runtime struct {
+	ActiveLLMConn func() (models.ProviderConnection, bool)
+}
 
-func (Runtime) Execute(item models.VersionedItem, input map[string]any, output string) (bool, string, error) {
+func (rt Runtime) Execute(item models.VersionedItem, input map[string]any, output string) (bool, string, error) {
 	code := activeCode(item)
 	switch item.Type {
 	case "Regex":
@@ -26,7 +33,8 @@ func (Runtime) Execute(item models.VersionedItem, input map[string]any, output s
 	case "CustomPython":
 		return executeGPython(code, input, output)
 	case "LLM", "":
-		return true, "llm-guardrail-stub", nil
+		text := textForLLM(input, output)
+		return rt.executeLLM(code, text)
 	default:
 		return false, "", fmt.Errorf("unsupported guardrail type: %s", item.Type)
 	}
@@ -41,7 +49,7 @@ type RunResult struct {
 
 // ExecuteDetail runs the guardrail and returns a RunResult with a detail string
 // describing the raw output — useful for the editor's test-run feature.
-func (Runtime) ExecuteDetail(item models.VersionedItem, input map[string]any, output string) (RunResult, error) {
+func (rt Runtime) ExecuteDetail(item models.VersionedItem, input map[string]any, output string) (RunResult, error) {
 	code := activeCode(item)
 	switch item.Type {
 	case "Regex":
@@ -83,7 +91,12 @@ func (Runtime) ExecuteDetail(item models.VersionedItem, input map[string]any, ou
 		}
 		return RunResult{Passed: passed, Engine: "gpython", Detail: r.Raw}, nil
 	case "LLM", "":
-		return RunResult{Passed: true, Engine: "llm-guardrail-stub", Detail: "(LLM guardrails are not evaluated in test mode)"}, nil
+		text := textForLLM(input, output)
+		passed, engine, err := rt.executeLLM(code, text)
+		if err != nil {
+			return RunResult{}, err
+		}
+		return RunResult{Passed: passed, Engine: engine, Detail: fmt.Sprintf("passed: %v", passed)}, nil
 	default:
 		return RunResult{}, fmt.Errorf("unsupported guardrail type: %s", item.Type)
 	}
@@ -115,6 +128,49 @@ func executeGoja(code string, input map[string]any, output string) (bool, string
 		return false, "", err
 	}
 	return value.ToBoolean(), "goja", nil
+}
+
+// textForLLM resolves the text that should be substituted into the rubric
+// prompt.  For output guardrails the response text is passed as output; for
+// input guardrails output is empty and the request text lives in input["text"].
+func textForLLM(input map[string]any, output string) string {
+	if output != "" {
+		return output
+	}
+	if t, ok := input["text"].(string); ok {
+		return t
+	}
+	return ""
+}
+
+// executeLLM fills {{text}} in the rubric prompt with text, sends it to the
+// configured LLM, and interprets the reply as a boolean verdict.
+// Replies of "true", "yes", "pass", or "1" (case-insensitive) are treated as
+// passing; everything else is treated as failing.
+func (rt Runtime) executeLLM(prompt, text string) (bool, string, error) {
+	if rt.ActiveLLMConn == nil {
+		return false, "llm", fmt.Errorf("no LLM connection configured")
+	}
+	conn, ok := rt.ActiveLLMConn()
+	if !ok {
+		return false, "llm", fmt.Errorf("no active LLM connection")
+	}
+
+	filled := strings.ReplaceAll(prompt, "{{text}}", text)
+	reply, err := llm.Chat(conn.BaseURL, conn.Model, []llm.Message{
+		{Role: "user", Content: filled},
+	})
+	if err != nil {
+		return false, "llm", fmt.Errorf("LLM guardrail inference: %w", err)
+	}
+
+	verdict := strings.ToLower(strings.TrimSpace(reply))
+	switch verdict {
+	case "true", "yes", "pass", "1":
+		return true, "llm", nil
+	default:
+		return false, "llm", nil
+	}
 }
 
 func executeGPython(code string, input map[string]any, output string) (bool, string, error) {

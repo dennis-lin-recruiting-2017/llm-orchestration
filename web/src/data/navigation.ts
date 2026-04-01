@@ -20,7 +20,7 @@ export const drawerNavigation: NavNode[] = [
   {
     label: "Application",
     children: [
-      { label: "Workspace", path: "/workspace" },
+      { label: "RAG", path: "/workspace" },
       { label: "Prompt templates", path: "/prompt-templates" },
       { label: "Input guardrails", path: "/input-guardrails" },
       { label: "Output guardrails", path: "/output-guardrails" },

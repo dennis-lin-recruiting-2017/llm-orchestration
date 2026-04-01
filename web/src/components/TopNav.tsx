@@ -2,7 +2,7 @@ import type { AppRoute } from "../lib/types"
 
 const items: Array<{ path: AppRoute; label: string }> = [
   { path: "/", label: "Home" },
-  { path: "/workspace", label: "Workspace" },
+  { path: "/workspace", label: "RAG" },
   { path: "/llm-connections", label: "LLM Connections" },
   { path: "/prompt-templates", label: "Prompt Templates" },
   { path: "/input-guardrails", label: "Input Guardrails" },

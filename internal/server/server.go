@@ -3,6 +3,7 @@ package server
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"llm-orchestration/internal/guardrails"
+	"llm-orchestration/internal/llm"
 	"llm-orchestration/internal/logdb"
 	"llm-orchestration/internal/models"
 	"llm-orchestration/internal/store"
@@ -60,7 +62,22 @@ func New(
 		Workflows:   workflows,
 		Connections: connections,
 		LogDB:       logs,
-		Runtime:     guardrails.Runtime{},
+		Runtime: guardrails.Runtime{
+			ActiveLLMConn: func() (models.ProviderConnection, bool) {
+				connections.Mu.RLock()
+				defer connections.Mu.RUnlock()
+				if len(connections.Data) == 0 {
+					return models.ProviderConnection{}, false
+				}
+				c := connections.Data[0]
+				switch c.Provider {
+				case "Ollama":
+					return c.Ollama, true
+				default: // "LMStudio" and anything unrecognised
+					return c.LMStudio, true
+				}
+			},
+		},
 	}, nil
 }
 
@@ -87,6 +104,7 @@ func (s *Server) APIMux() *http.ServeMux {
 	mux.HandleFunc("/api/workflow-logs/", s.HandleWorkflowLogDetail)
 	mux.HandleFunc("/api/workflows", s.HandleWorkflowCollection)
 	mux.HandleFunc("/api/workflows/", s.HandleWorkflowItem)
+	mux.HandleFunc("/api/run-template", s.HandleRunTemplate)
 	mux.HandleFunc("/api/run-guardrail", s.HandleRunGuardrail)
 	mux.HandleFunc("/ai/v1/workflow/", s.HandleWorkflowEndpoint)
 	return mux
@@ -551,9 +569,27 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 			_ = json.Unmarshal(bodyBytes, &req)
 		}
 
+		// Resolve {{query}} server-side: search using rawQuery (fallback to query field).
+		queryTerm := req.RawQuery
+		if queryTerm == "" {
+			queryTerm = req.Query
+		}
+		var resolvedQuery string
+		var searchDurationMs int64
+		if queryTerm != "" {
+			searchStart := time.Now()
+			docs := s.searchDocs(queryTerm)
+			searchDurationMs = time.Since(searchStart).Microseconds()
+			if formatted := formatSearchResults(docs); formatted != "" {
+				resolvedQuery = formatted
+			} else {
+				resolvedQuery = queryTerm
+			}
+		}
+
 		requestID := GenerateID("req")
 		if s.LogDB != nil {
-			if err := s.LogDB.InsertRequest(requestID, wf.ID, wf.PromptTemplateID, activePromptVersionNumber, r.Method, r.URL.Path, requestBody); err != nil {
+			if err := s.LogDB.InsertRequest(requestID, wf.ID, wf.PromptTemplateID, activePromptVersionNumber, r.Method, r.URL.Path, requestBody, req.RawQuery, resolvedQuery, req.Text); err != nil {
 				log.Printf("log workflow request: %v", err)
 			}
 		}
@@ -563,6 +599,7 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 			inputPayload[k] = v
 		}
 		inputPayload["text"] = req.Text
+		inputPayload["query"] = resolvedQuery
 
 		for _, gr := range selectedGuardrails(wf.InputGuardrailIDs, inputs) {
 			passed, engine, err := s.Runtime.Execute(gr, inputPayload, "")
@@ -578,6 +615,36 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
+		// Fill prompt template and call LLM.
+		s.Templates.Mu.RLock()
+		_, promptContent := activePromptVersion(wf.PromptTemplateID, s.Templates.Data)
+		s.Templates.Mu.RUnlock()
+
+		var llmOutput, finalPrompt string
+		var inferenceDurationUs int64
+		var inferenceEndpoint, inferenceModel string
+		if conn, ok := s.activeLLMConn(); ok && promptContent != "" {
+			inferenceEndpoint = conn.BaseURL
+			inferenceModel = conn.Model
+			finalPrompt = strings.ReplaceAll(promptContent, "{{text}}", req.Text)
+			finalPrompt = strings.ReplaceAll(finalPrompt, "{{query}}", resolvedQuery)
+			inferenceStart := time.Now()
+			result, err := llm.Chat(conn.BaseURL, conn.Model, []llm.Message{
+				{Role: "user", Content: finalPrompt},
+			})
+			inferenceDurationUs = time.Since(inferenceStart).Microseconds()
+			if err != nil {
+				log.Printf("workflow LLM inference: %v", err)
+			} else {
+				llmOutput = result
+			}
+		}
+		if s.LogDB != nil {
+			if err := s.LogDB.UpdateRequestInference(requestID, finalPrompt, llmOutput, inferenceEndpoint, inferenceModel, searchDurationMs, inferenceDurationUs); err != nil {
+				log.Printf("log workflow inference: %v", err)
+			}
+		}
+
 		resp := models.WorkflowInvokeResponse{
 			WorkflowID:            wf.ID,
 			PromptTemplateID:      wf.PromptTemplateID,
@@ -588,10 +655,11 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 			OutputTypes:           s.guardrailTypes(wf.OutputGuardrailIDs, outputs),
 			Status:                "accepted",
 			Echo:                  req.Text,
+			LLMOutput:             llmOutput,
 		}
 
 		for _, gr := range selectedGuardrails(wf.OutputGuardrailIDs, outputs) {
-			passed, engine, err := s.Runtime.Execute(gr, req.Input, resp.Echo)
+			passed, engine, err := s.Runtime.Execute(gr, inputPayload, llmOutput)
 			detail := "ok"
 			if err != nil {
 				passed = false
@@ -623,6 +691,39 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+func (s *Server) HandleRunTemplate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		MethodNotAllowed(w)
+		return
+	}
+	var req struct {
+		Code  string `json:"code"`
+		Text  string `json:"text"`
+		Query string `json:"query"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	conn, ok := s.activeLLMConn()
+	if !ok {
+		WriteJSON(w, http.StatusOK, map[string]any{"output": "", "error": "no LLM connection configured"})
+		return
+	}
+
+	prompt := strings.ReplaceAll(req.Code, "{{text}}", req.Text)
+	prompt = strings.ReplaceAll(prompt, "{{query}}", req.Query)
+	output, err := llm.Chat(conn.BaseURL, conn.Model, []llm.Message{
+		{Role: "user", Content: prompt},
+	})
+	if err != nil {
+		WriteJSON(w, http.StatusOK, map[string]any{"output": "", "error": err.Error()})
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"output": output, "error": nil})
+}
+
 func (s *Server) HandleRunGuardrail(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		MethodNotAllowed(w)
@@ -649,6 +750,51 @@ func (s *Server) HandleRunGuardrail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"passed": result.Passed, "engine": result.Engine, "detail": result.Detail, "error": nil})
+}
+
+func (s *Server) activeLLMConn() (models.ProviderConnection, bool) {
+	s.Connections.Mu.RLock()
+	defer s.Connections.Mu.RUnlock()
+	if len(s.Connections.Data) == 0 {
+		return models.ProviderConnection{}, false
+	}
+	c := s.Connections.Data[0]
+	if c.Provider == "Ollama" {
+		return c.Ollama, true
+	}
+	return c.LMStudio, true
+}
+
+// searchDocs runs keyword/vector search and returns matching documents.
+func (s *Server) searchDocs(q string) []models.Document {
+	if q == "" {
+		return []models.Document{}
+	}
+	if emb, ok := s.DocsByQuery[strings.ToLower(q)]; ok {
+		return TopVectorMatches(s.Docs, emb, 5)
+	}
+	ql := strings.ToLower(q)
+	results := make([]models.Document, 0, 5)
+	for _, d := range s.Docs {
+		if strings.Contains(strings.ToLower(d.Title), ql) || strings.Contains(strings.ToLower(d.Body), ql) || strings.Contains(strings.ToLower(d.Category), ql) {
+			item := d
+			item.Embedding = nil
+			results = append(results, item)
+		}
+	}
+	return results
+}
+
+// formatSearchResults converts documents into a numbered list matching the frontend format.
+func formatSearchResults(docs []models.Document) string {
+	if len(docs) == 0 {
+		return ""
+	}
+	parts := make([]string, len(docs))
+	for i, d := range docs {
+		parts[i] = fmt.Sprintf("[%d] %s\n%s", i+1, d.Title, d.Body)
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 func (s *Server) FindWorkflow(id string) (models.Workflow, bool) {

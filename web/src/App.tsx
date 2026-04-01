@@ -53,6 +53,9 @@ export default function App() {
   const [route, setRoute] = useState<AppRoute>(initialRoute)
   const [query, setQuery] = useState("orchestration")
   const [apiBaseURL, setApiBaseURL] = useState("http://127.0.0.1:8081")
+  const [searchResults, setSearchResults] = useState<Document[]>(demoDocuments)
+  const [searchMode, setSearchMode] = useState("demo")
+  const [searchLoading, setSearchLoading] = useState(false)
 
   useEffect(() => {
     getJSON<AppConfig>("/config.json")
@@ -65,6 +68,23 @@ export default function App() {
     window.addEventListener("popstate", onPopState)
     return () => window.removeEventListener("popstate", onPopState)
   }, [])
+
+  async function runSearch(q: string) {
+    setSearchLoading(true)
+    try {
+      const data = await getJSON<{ mode: string; results: Document[] }>(
+        `${apiBaseURL}/api/search?q=${encodeURIComponent(q)}`
+      )
+      setSearchMode(data.mode)
+      setSearchResults(data.results)
+    } catch {
+      // keep previous results on error
+    } finally {
+      setSearchLoading(false)
+    }
+  }
+
+  function onSearch() { runSearch(query) }
 
   function onNavigate(path: AppRoute) {
     if (path === route) return
@@ -93,7 +113,7 @@ export default function App() {
   } else if (route === "/about") {
     page = <AboutPage />
   } else if (route === "/workspace") {
-    page = <WorkspacePage cfg={{ webBaseURL: window.location.origin, apiBaseURL: "http://127.0.0.1:8081" }} query={query} mode="vector" loading={false} results={demoDocuments} documents={demoDocuments} onQueryChange={setQuery} onSearch={() => undefined} onChip={setQuery} />
+    page = <WorkspacePage cfg={{ webBaseURL: window.location.origin, apiBaseURL }} query={query} mode={searchMode} loading={searchLoading} results={searchResults} documents={demoDocuments} onQueryChange={setQuery} onSearch={onSearch} onChip={(chip) => { setQuery(chip); runSearch(chip) }} />
   } else if (route === "/prompt-templates") {
     page = <VersionedEditorPage apiBaseURL={apiBaseURL} apiPath="/api/templates" title="Prompt templates" typed={false} />
   } else if (route === "/input-guardrails") {
@@ -101,7 +121,7 @@ export default function App() {
   } else if (route === "/output-guardrails") {
     page = <VersionedEditorPage apiBaseURL={apiBaseURL} apiPath="/api/output-guardrails" title="Output guardrails" typed={true} />
   } else if (route === "/workflows") {
-    page = <WorkflowsPage workflows={demoWorkflows} active={demoWorkflows[0]} inputs={demoInputs} outputs={demoOutputs} templates={demoTemplates} apiBaseURL={apiBaseURL} status="Source demo view" />
+    page = <WorkflowsPage apiBaseURL={apiBaseURL} />
   } else if (route === "/llm-connections") {
     page = <LLMConnectionsPage connections={demoConnections} />
   } else {

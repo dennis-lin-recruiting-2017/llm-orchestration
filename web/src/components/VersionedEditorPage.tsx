@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, useMemo } from "react"
 import { getJSON } from "../lib/api"
+import { fetchFormattedSearchResults } from "../lib/search"
 import type { VersionedItem } from "../lib/types"
 
 type Props = {
@@ -16,16 +17,24 @@ type RunResult = {
   error: string | null
 }
 
+type TemplateResult = {
+  output: string
+  error: string | null
+}
+
 export function VersionedEditorPage({ apiBaseURL, apiPath, title, typed }: Props) {
   const [items, setItems] = useState<VersionedItem[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [selectedType, setSelectedType] = useState<string>("LLM")
-  const [testInput, setTestInput] = useState("")
+  const [testInput, setTestInput] = useState(() => localStorage.getItem(`${apiPath}:testInput`) ?? "")
+  const [query, setQuery] = useState(() => localStorage.getItem(`${apiPath}:query`) ?? "")
+  const [queryResults, setQueryResults] = useState<string | null>(null)
   const [runResult, setRunResult] = useState<RunResult | null>(null)
+  const [templateResult, setTemplateResult] = useState<TemplateResult | null>(null)
+  const [codeContent, setCodeContent] = useState("")
   const [runLoading, setRunLoading] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
   const descRef = useRef<HTMLInputElement>(null)
-  const codeRef = useRef<HTMLTextAreaElement>(null)
 
   const loadItems = useCallback(async () => {
     const data = await getJSON<{ items: VersionedItem[] }>(`${apiBaseURL}${apiPath}`)
@@ -44,8 +53,15 @@ export function VersionedEditorPage({ apiBaseURL, apiPath, title, typed }: Props
 
   useEffect(() => {
     setSelectedType(active?.type || "LLM")
+    setCodeContent(latest)
     setRunResult(null)
-  }, [active?.id])
+    setTemplateResult(null)
+    setQueryResults(null)
+  }, [active?.id, latest])
+
+  useEffect(() => { setQueryResults(null) }, [query])
+  useEffect(() => { localStorage.setItem(`${apiPath}:testInput`, testInput) }, [apiPath, testInput])
+  useEffect(() => { localStorage.setItem(`${apiPath}:query`, query) }, [apiPath, query])
 
   const types = ["LLM", "Regex", "CustomJavaScript", "CustomPython"]
 
@@ -68,7 +84,7 @@ export function VersionedEditorPage({ apiBaseURL, apiPath, title, typed }: Props
         type: selectedType,
         name: nameRef.current?.value ?? active.name,
         description: descRef.current?.value ?? active.description,
-        content: codeRef.current?.value ?? "",
+        content: codeContent,
       }),
     })
     setItems((prev) => prev.map((i) => (i.id === active.id ? updated : i)))
@@ -98,18 +114,34 @@ export function VersionedEditorPage({ apiBaseURL, apiPath, title, typed }: Props
   }
 
   async function onRunCode() {
-    const code = codeRef.current?.value ?? ""
+    const code = codeContent
     setRunLoading(true)
     setRunResult(null)
+    setTemplateResult(null)
     try {
-      const result = await getJSON<RunResult>(`${apiBaseURL}/api/run-guardrail`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: selectedType, code, text: testInput }),
-      })
-      setRunResult(result)
+      if (!typed) {
+        const resolvedQuery = await fetchFormattedSearchResults(apiBaseURL, query)
+        setQueryResults(resolvedQuery)
+        const result = await getJSON<TemplateResult>(`${apiBaseURL}/api/run-template`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, text: testInput, query: resolvedQuery }),
+        })
+        setTemplateResult(result)
+      } else {
+        const result = await getJSON<RunResult>(`${apiBaseURL}/api/run-guardrail`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: selectedType, code, text: testInput }),
+        })
+        setRunResult(result)
+      }
     } catch (err) {
-      setRunResult({ passed: false, engine: "", error: String(err) })
+      if (!typed) {
+        setTemplateResult({ output: "", error: String(err) })
+      } else {
+        setRunResult({ passed: false, engine: "", detail: "", error: String(err) })
+      }
     } finally {
       setRunLoading(false)
     }
@@ -134,6 +166,13 @@ export function VersionedEditorPage({ apiBaseURL, apiPath, title, typed }: Props
       default:                 return null
     }
   }
+
+  const finalPrompt = useMemo(() => {
+    if (typed) return null
+    return codeContent
+      .replaceAll("{{query}}", "<<query results>>")
+      .replaceAll("{{text}}", testInput)
+  }, [typed, codeContent, testInput])
 
   function runSummaryText(): string {
     if (!runResult) return ""
@@ -200,22 +239,49 @@ export function VersionedEditorPage({ apiBaseURL, apiPath, title, typed }: Props
         <label>
           {contentLabel()}
           {contentHint() ? <small className="content-hint">{contentHint()}</small> : null}
-          <textarea key={`code-${active?.id}`} rows={18} defaultValue={latest} ref={codeRef} />
+          <textarea
+            key={`code-${active?.id}`}
+            rows={18}
+            value={codeContent}
+            onChange={(e) => setCodeContent(e.target.value)}
+          />
         </label>
 
         <div className="run-section">
+          {!typed ? (
+            <label>
+              Query
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Enter query — replaces {{query}} in the template"
+              />
+            </label>
+          ) : null}
           <label>
             Test input text
             <input
               value={testInput}
               onChange={(e) => setTestInput(e.target.value)}
-              placeholder="Enter text to test the guardrail against"
+              placeholder={typed ? "Enter text to test the guardrail against" : "Enter text — replaces {{text}} in the template"}
             />
           </label>
           <button type="button" onClick={onRunCode} disabled={runLoading}>
             {runLoading ? "Running…" : "Run"}
           </button>
-          {runResult !== null ? (
+          {!typed && templateResult !== null ? (
+            <label>
+              Output
+              <textarea
+                rows={8}
+                readOnly
+                value={templateResult.error ? `Error: ${templateResult.error}` : templateResult.output}
+                placeholder="(no output)"
+                className={templateResult.error ? "run-result-error" : ""}
+              />
+            </label>
+          ) : null}
+          {typed && runResult !== null ? (
             <>
               <label>
                 Output
@@ -238,6 +304,13 @@ export function VersionedEditorPage({ apiBaseURL, apiPath, title, typed }: Props
             </>
           ) : null}
         </div>
+
+        {finalPrompt !== null ? (
+          <label>
+            Final prompt
+            <textarea rows={8} readOnly value={finalPrompt} placeholder="(type a query or input text to preview the interpolated prompt)" />
+          </label>
+        ) : null}
 
         <p className="meta">Click a version in the history panel to make it active.</p>
       </section>

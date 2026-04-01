@@ -83,6 +83,15 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE workflow_request_logs ADD COLUMN prompt_template_id TEXT NOT NULL DEFAULT '';`,
 		`ALTER TABLE workflow_request_logs ADD COLUMN prompt_template_version INTEGER NOT NULL DEFAULT 0;`,
 		`CREATE INDEX IF NOT EXISTS idx_workflow_request_logs_request_id ON workflow_request_logs(request_id);`,
+		`ALTER TABLE workflow_request_logs ADD COLUMN query TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE workflow_request_logs ADD COLUMN text TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE workflow_request_logs ADD COLUMN final_prompt TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE workflow_request_logs ADD COLUMN llm_output TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE workflow_request_logs ADD COLUMN raw_query TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE workflow_request_logs ADD COLUMN search_duration_ms INTEGER NOT NULL DEFAULT 0;`,
+		`ALTER TABLE workflow_request_logs ADD COLUMN inference_duration_ms INTEGER NOT NULL DEFAULT 0;`,
+		`ALTER TABLE workflow_request_logs ADD COLUMN inference_endpoint TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE workflow_request_logs ADD COLUMN inference_model TEXT NOT NULL DEFAULT '';`,
 		`CREATE TABLE IF NOT EXISTS workflow_response_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			request_id TEXT NOT NULL,
@@ -136,12 +145,20 @@ func intToBool(v int) bool {
 	return v != 0
 }
 
-func (d *DB) InsertRequest(requestID, workflowID, promptTemplateID string, promptTemplateVersion int, method, path, body string) error {
+func (d *DB) InsertRequest(requestID, workflowID, promptTemplateID string, promptTemplateVersion int, method, path, body, rawQuery, query, text string) error {
 	_, err := d.SQL.Exec(
 		`INSERT INTO workflow_request_logs
-		(request_id, workflow_id, prompt_template_id, prompt_template_version, method, path, body, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		requestID, workflowID, promptTemplateID, promptTemplateVersion, method, path, body, time.Now().UTC().Format(time.RFC3339Nano),
+		(request_id, workflow_id, prompt_template_id, prompt_template_version, method, path, body, raw_query, query, text, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		requestID, workflowID, promptTemplateID, promptTemplateVersion, method, path, body, rawQuery, query, text, time.Now().UTC().Format(time.RFC3339Nano),
+	)
+	return err
+}
+
+func (d *DB) UpdateRequestInference(requestID, finalPrompt, llmOutput, inferenceEndpoint, inferenceModel string, searchDurationUs, inferenceDurationUs int64) error {
+	_, err := d.SQL.Exec(
+		`UPDATE workflow_request_logs SET final_prompt = ?, llm_output = ?, inference_endpoint = ?, inference_model = ?, search_duration_ms = ?, inference_duration_ms = ? WHERE request_id = ?`,
+		finalPrompt, llmOutput, inferenceEndpoint, inferenceModel, searchDurationUs, inferenceDurationUs, requestID,
 	)
 	return err
 }
@@ -186,7 +203,7 @@ func (d *DB) ListWorkflowLogs() ([]models.WorkflowLogListItem, error) {
 	}
 	defer rows.Close()
 
-	var out []models.WorkflowLogListItem
+	out := []models.WorkflowLogListItem{}
 	for rows.Next() {
 		var item models.WorkflowLogListItem
 		if err := rows.Scan(&item.RequestID, &item.RequestTimestamp, &item.PromptTemplateID, &item.PromptTemplateVersion); err != nil {
@@ -198,7 +215,7 @@ func (d *DB) ListWorkflowLogs() ([]models.WorkflowLogListItem, error) {
 }
 
 func scanGuardrailRows(rows *sql.Rows) ([]models.GuardrailLogEntry, error) {
-	var out []models.GuardrailLogEntry
+	out := []models.GuardrailLogEntry{}
 	for rows.Next() {
 		var item models.GuardrailLogEntry
 		var passedInt int
@@ -217,7 +234,7 @@ func (d *DB) GetWorkflowLogDetail(requestID string) (models.WorkflowLogDetail, e
 	var statusCode int
 
 	err := d.SQL.QueryRow(`
-		SELECT request_id, workflow_id, prompt_template_id, prompt_template_version, created_at, body
+		SELECT request_id, workflow_id, prompt_template_id, prompt_template_version, created_at, body, raw_query, query, text, final_prompt, llm_output, search_duration_ms, inference_duration_ms, inference_endpoint, inference_model
 		FROM workflow_request_logs
 		WHERE request_id = ?
 		ORDER BY id DESC
@@ -228,6 +245,15 @@ func (d *DB) GetWorkflowLogDetail(requestID string) (models.WorkflowLogDetail, e
 		&detail.PromptTemplateVersion,
 		&detail.RequestTimestamp,
 		&detail.RequestBody,
+		&detail.RawQuery,
+		&detail.Query,
+		&detail.Text,
+		&detail.FinalPrompt,
+		&detail.LLMOutput,
+		&detail.SearchDurationUs,
+		&detail.InferenceDurationUs,
+		&detail.InferenceEndpoint,
+		&detail.InferenceModel,
 	)
 	if err != nil {
 		return detail, err

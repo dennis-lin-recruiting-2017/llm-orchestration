@@ -18,8 +18,8 @@ export function WorkspacePage(props: Props) {
   return (
     <section className="content-shell">
       <header className="hero">
-        <p className="eyebrow">Embedded full-stack starter</p>
-        <h1>Workspace</h1>
+        <p className="eyebrow">Retrieval-augmented generation</p>
+        <h1>RAG</h1>
         <p className="lede">
           Web UI on {props.cfg.webBaseURL} and API on {props.cfg.apiBaseURL}.
         </p>
