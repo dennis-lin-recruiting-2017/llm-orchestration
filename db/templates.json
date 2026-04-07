@@ -9,5 +9,25 @@
       {"version":2,"content":"You are the orchestration controller. Route work to the right tool, preserve user intent, and return concise grounded answers.","updatedAt":"2026-03-27T00:00:00Z"}
     ],
     "updatedAt":"2026-03-27T00:00:00Z"
+  },
+  {
+    "id":"tpl-rag-1",
+    "name":"RAG Q&A",
+    "description":"Answer a user question using retrieved documents. Populate {{query}} with search results and {{text}} with the question.",
+    "currentVersion":1,
+    "versions":[
+      {"version":1,"content":"You are a helpful assistant with access to a knowledge base. Use the retrieved documents below to answer the user's question accurately and concisely.\n\nRetrieved documents:\n{{query}}\n\nUser question:\n{{text}}\n\nProvide a clear answer based on the retrieved documents. Cite the document number (e.g. [1]) when referencing specific information. If the documents do not contain enough information to answer the question, say so clearly.","updatedAt":"2026-04-01T00:00:00Z"}
+    ],
+    "updatedAt":"2026-04-01T00:00:00Z"
+  },
+  {
+    "id":"tpl-classify-1",
+    "name":"Content Analysis",
+    "description":"Classify the sentiment and intent of the text provided in {{text}}.",
+    "currentVersion":1,
+    "versions":[
+      {"version":1,"content":"Analyze the following text and classify its sentiment and intent.\n\nText:\n{{text}}\n\nRespond in this exact format:\nSentiment: [positive/negative/neutral]\nIntent: [one sentence describing what the author wants]","updatedAt":"2026-04-01T00:00:00Z"}
+    ],
+    "updatedAt":"2026-04-01T00:00:00Z"
   }
 ]

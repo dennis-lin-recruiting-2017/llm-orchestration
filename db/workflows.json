@@ -1,11 +1,20 @@
 [
   {
-    "id":"1f0f2b3c-9c52-6a10-a111-1234567890ab",
-    "name":"Default assistant workflow",
-    "description":"Starter workflow wiring together guardrails and the main prompt.",
-    "promptTemplateId":"tpl-system-1",
-    "inputGuardrailIds":["igr-1","igr-2","igr-3"],
-    "outputGuardrailIds":["ogr-1","ogr-2"],
-    "updatedAt":"2026-03-30T00:00:00Z"
+    "id":"wf-rag-qa-001",
+    "name":"RAG Q&A",
+    "description":"Answer user questions using retrieved documents. Input guardrails: Regex (PII check) + LLM (topic relevance). Output guardrails: JavaScript (secrets/length) + Regex (refusal detection).",
+    "promptTemplateId":"tpl-rag-1",
+    "inputGuardrailIds":["igr-1","igr-4"],
+    "outputGuardrailIds":["ogr-2","ogr-3"],
+    "updatedAt":"2026-04-01T00:00:00Z"
+  },
+  {
+    "id":"wf-content-analysis-002",
+    "name":"Content Analysis",
+    "description":"Classify the sentiment and intent of a piece of text. Input guardrails: JavaScript (length) + Python (word count). Output guardrails: LLM (quality check) + Python (minimum content).",
+    "promptTemplateId":"tpl-classify-1",
+    "inputGuardrailIds":["igr-2","igr-3"],
+    "outputGuardrailIds":["ogr-1","ogr-4"],
+    "updatedAt":"2026-04-01T00:00:00Z"
   }
 ]

@@ -2,26 +2,49 @@
   {
     "id":"ogr-1",
     "type":"LLM",
-    "name":"Citation enforcement",
-    "description":"Require sources for grounded claims.",
-    "currentVersion":3,
+    "name":"Response quality check",
+    "description":"Uses the LLM to verify the response is helpful and on-topic rather than evasive or harmful.",
+    "currentVersion":4,
     "versions":[
       {"version":1,"content":"Require citations for material factual claims when a retrieval source is available.","updatedAt":"2026-03-27T00:00:00Z"},
       {"version":2,"content":"Example validation: reject answers that mention sources but do not include a citation marker.","updatedAt":"2026-03-28T00:00:00Z"},
-      {"version":3,"content":"LLM rubric: verify the answer makes supported factual claims only and flags unsupported statements.","updatedAt":"2026-03-29T00:00:00Z"}
+      {"version":3,"content":"LLM rubric: verify the answer makes supported factual claims only and flags unsupported statements.","updatedAt":"2026-03-29T00:00:00Z"},
+      {"version":4,"content":"You are a quality reviewer. Evaluate whether the following response adequately and helpfully answers a user's request.\n\nResponse: \"{{text}}\"\n\nReply with only \"true\" if the response is helpful and on-topic, or \"false\" if it is unhelpful, evasive, harmful, or refuses to engage with a reasonable request.","updatedAt":"2026-04-01T00:00:00Z"}
     ],
-    "updatedAt":"2026-03-29T00:00:00Z"
+    "updatedAt":"2026-04-01T00:00:00Z"
   },
   {
     "id":"ogr-2",
     "type":"CustomJavaScript",
-    "name":"Sensitive output policy",
-    "description":"Prevent unsafe or policy-violating final responses.",
+    "name":"Secrets and length check",
+    "description":"Fails if the output contains an API key pattern or exceeds 1500 words.",
     "currentVersion":2,
     "versions":[
       {"version":1,"content":"Example validation: reject outputs that contain secrets, API keys, or access tokens.","updatedAt":"2026-03-28T00:00:00Z"},
       {"version":2,"content":"return !output.includes('sk-') && output.split(/\\s+/).length < 1500;","updatedAt":"2026-03-29T00:00:00Z"}
     ],
     "updatedAt":"2026-03-29T00:00:00Z"
+  },
+  {
+    "id":"ogr-3",
+    "type":"Regex",
+    "name":"Refusal detection",
+    "description":"Fails if the LLM response begins with a refusal phrase, indicating it did not attempt to answer.",
+    "currentVersion":1,
+    "versions":[
+      {"version":1,"content":"(?i)^(I'm sorry[,.]|I cannot |I can't |I am unable to |Unfortunately[,.]? I (cannot|can't|am unable))","updatedAt":"2026-04-01T00:00:00Z"}
+    ],
+    "updatedAt":"2026-04-01T00:00:00Z"
+  },
+  {
+    "id":"ogr-4",
+    "type":"CustomPython",
+    "name":"Minimum response content",
+    "description":"Passes when the output contains at least 5 words, ensuring the model produced a real answer.",
+    "currentVersion":1,
+    "versions":[
+      {"version":1,"content":"text = output.strip()\nreturn len(text) >= 20 and len(text.split()) >= 5","updatedAt":"2026-04-01T00:00:00Z"}
+    ],
+    "updatedAt":"2026-04-01T00:00:00Z"
   }
 ]
