@@ -1,7 +1,422 @@
 [
-  {"id":1,"title":"Router policy and delegation","category":"routing","body":"Use a lightweight router to delegate user requests to the right specialist workflow while preserving traceable decisions.","embedding":[0.91,0.10,0.15,0.05]},
-  {"id":2,"title":"Memory and session state","category":"memory","body":"Persist compact session facts and retrieval summaries so downstream calls can use context without replaying the whole transcript.","embedding":[0.12,0.92,0.08,0.10]},
-  {"id":3,"title":"Retrieval pipeline","category":"retrieval","body":"Blend lexical filters with semantic ranking to pull the most relevant context for grounded responses and evaluations.","embedding":[0.11,0.18,0.93,0.22]},
-  {"id":4,"title":"Evaluation harness","category":"evaluation","body":"Track answer quality, latency, and policy regressions with a repeatable test suite before promoting workflow changes.","embedding":[0.15,0.10,0.21,0.95]},
-  {"id":5,"title":"Agent orchestration runtime","category":"agents","body":"Coordinate planner, executor, and reviewer roles behind a single API while keeping each step observable and bounded.","embedding":[0.85,0.20,0.20,0.05]}
+  {
+    "id": 1,
+    "title": "Intent-based routing with confidence thresholds",
+    "category": "routing",
+    "body": "Classify incoming requests by intent score before dispatching to specialist workflows. Reject ambiguous queries below a confidence threshold rather than routing them incorrectly. Use multi-label classifiers when intents overlap so the router can fan out to parallel subworkflows.",
+    "embedding": [0.92, 0.08, 0.12, 0.04]
+  },
+  {
+    "id": 2,
+    "title": "Probabilistic task dispatcher",
+    "category": "routing",
+    "body": "Assign each incoming task a probability distribution over downstream handlers based on semantic embedding similarity. Route deterministically above a high-confidence cutoff; sample from the distribution for ambiguous cases to avoid hard failures on edge inputs.",
+    "embedding": [0.88, 0.12, 0.16, 0.06]
+  },
+  {
+    "id": 3,
+    "title": "Rule-based query classification",
+    "category": "routing",
+    "body": "Layer lightweight keyword and regex rules ahead of a heavier neural classifier to cheaply handle the most frequent query patterns. Reserve LLM-based classification for the long tail. Cache classifier decisions per session so repeated rephrasings of the same intent skip classification entirely.",
+    "embedding": [0.83, 0.15, 0.19, 0.08]
+  },
+  {
+    "id": 4,
+    "title": "Cascade fallback routing",
+    "category": "routing",
+    "body": "Define a priority-ordered chain of handlers: fast local model first, then remote API, then human handoff. Each tier is tried only when the previous tier signals low confidence or times out. Log all fallback events to identify which query patterns consistently escape the primary handler.",
+    "embedding": [0.76, 0.20, 0.25, 0.10]
+  },
+  {
+    "id": 5,
+    "title": "Latency-aware workflow selection",
+    "category": "routing",
+    "body": "Route queries to different model tiers based on real-time latency budgets negotiated in request headers. Track rolling p99 latencies per workflow and reroute when a workflow degrades. Pair with circuit-breaker logic to avoid cascading slowdowns across an orchestrated pipeline.",
+    "embedding": [0.68, 0.25, 0.30, 0.14]
+  },
+  {
+    "id": 6,
+    "title": "Semantic intent detection for routing",
+    "category": "routing",
+    "body": "Embed the user query and compare it against prototype embeddings for each route destination. Cosine similarity above a tuned threshold triggers routing; similarity below triggers a clarification request. Combine with retrieval signals to resolve queries that mix informational and transactional intents.",
+    "embedding": [0.58, 0.30, 0.38, 0.18]
+  },
+  {
+    "id": 7,
+    "title": "Retrieval-guided routing decisions",
+    "category": "routing",
+    "body": "Fetch a small set of candidate documents before routing so the dispatcher has domain context, not just raw query text. The retrieved snippets nudge ambiguous queries toward the correct specialist. This hybrid approach reduces misrouting on queries where user phrasing diverges from internal taxonomy.",
+    "embedding": [0.45, 0.28, 0.55, 0.22]
+  },
+  {
+    "id": 8,
+    "title": "Session-state signals in routing",
+    "category": "routing",
+    "body": "Incorporate recent conversation history into routing decisions by encoding the last N turns alongside the current query. Session memory reveals topic continuity that single-turn classifiers miss. A query like 'what about the second option?' routes correctly only when the router knows what options were presented earlier.",
+    "embedding": [0.35, 0.62, 0.30, 0.18]
+  },
+  {
+    "id": 9,
+    "title": "Routing policy evaluation and regression testing",
+    "category": "routing",
+    "body": "Build a golden-set of labeled query-to-route pairs and run it after every classifier update. Track precision, recall, and confusion matrices per route destination. Flag regressions automatically in CI before they reach production. Attach cost estimates to misroutes so stakeholders understand the business impact.",
+    "embedding": [0.25, 0.15, 0.28, 0.72]
+  },
+  {
+    "id": 10,
+    "title": "Token budget allocation across workflows",
+    "category": "routing",
+    "body": "Model token consumption as a shared resource across concurrent workflows. Assign budgets based on query priority tiers and enforce hard caps at the gateway layer. Overflow queries are queued or shed rather than allowed to exhaust capacity for higher-priority sessions.",
+    "embedding": [0.18, 0.20, 0.45, 0.65]
+  },
+  {
+    "id": 11,
+    "title": "ReAct agent loop implementation",
+    "category": "agents",
+    "body": "Implement the Reason+Act cycle by alternating between a thought step that selects the next tool and an observation step that integrates tool output. Keep the loop bounded with a hard step limit and mandatory final-answer gate. Store intermediate reasoning as structured JSON so downstream auditors can replay the agent's logic.",
+    "embedding": [0.90, 0.16, 0.14, 0.04]
+  },
+  {
+    "id": 12,
+    "title": "Tool-augmented language agents",
+    "category": "agents",
+    "body": "Expose external APIs, code interpreters, and knowledge bases as typed tool schemas that the agent can invoke. Use strict JSON schemas for tool arguments to prevent prompt injection via malformed inputs. Validate tool return values before feeding them back into the context window.",
+    "embedding": [0.86, 0.20, 0.17, 0.06]
+  },
+  {
+    "id": 13,
+    "title": "Multi-step task planning for agents",
+    "category": "agents",
+    "body": "Generate an explicit plan before execution: decompose the goal into ordered subtasks, estimate required tools per subtask, and identify dependencies. Replan dynamically when a subtask fails or returns unexpected results. Planning overhead pays off on tasks with more than three sequential tool calls.",
+    "embedding": [0.80, 0.25, 0.22, 0.09]
+  },
+  {
+    "id": 14,
+    "title": "Sandboxed code execution for agents",
+    "category": "agents",
+    "body": "Run agent-generated code in isolated containers with network, filesystem, and CPU limits. Return structured execution results including stdout, stderr, exit code, and resource usage. Time out and kill runaway processes rather than letting them block the agent loop indefinitely.",
+    "embedding": [0.73, 0.28, 0.26, 0.12]
+  },
+  {
+    "id": 15,
+    "title": "Hierarchical agent teams and delegation",
+    "category": "agents",
+    "body": "Organize agents into planner-executor-reviewer hierarchies. The planner breaks down goals; executors carry out steps using domain-specific tools; reviewers validate outputs before returning results up the chain. Hierarchies scale complex tasks that a flat single-agent loop cannot handle reliably.",
+    "embedding": [0.65, 0.32, 0.28, 0.15]
+  },
+  {
+    "id": 16,
+    "title": "Agent state recovery and checkpointing",
+    "category": "agents",
+    "body": "Persist agent state—current plan, completed steps, and accumulated observations—to durable storage after each tool call. On failure, resume from the last checkpoint rather than restarting from scratch. Design state schemas to be forward-compatible so new agent versions can resume tasks started by older ones.",
+    "embedding": [0.55, 0.45, 0.25, 0.18]
+  },
+  {
+    "id": 17,
+    "title": "Browser automation with LLM agents",
+    "category": "agents",
+    "body": "Navigate web UIs using a combination of DOM inspection and visual screenshot analysis. Issue click, type, and scroll actions via a headless browser API. Handle dynamic pages by waiting for element visibility before acting. Extract structured data from rendered pages and feed it back into the agent context.",
+    "embedding": [0.45, 0.25, 0.42, 0.28]
+  },
+  {
+    "id": 18,
+    "title": "Agent output ranking and quality filtering",
+    "category": "agents",
+    "body": "Generate multiple candidate outputs per agent step and score them with a lightweight judge model before surfacing the best to the user. Use the judge's confidence scores to decide whether to present the top candidate or ask the agent to try again. Track judge accuracy over time to detect model drift.",
+    "embedding": [0.35, 0.20, 0.30, 0.62]
+  },
+  {
+    "id": 19,
+    "title": "Knowledge retrieval integration for agents",
+    "category": "agents",
+    "body": "Augment agent tool sets with a retrieval tool that fetches semantically relevant passages on demand. The agent calls retrieval when a question requires domain knowledge not present in its parameters. Return ranked passages with provenance metadata so the agent can cite sources in its final output.",
+    "embedding": [0.25, 0.28, 0.72, 0.35]
+  },
+  {
+    "id": 20,
+    "title": "Prompt compression for long agent runs",
+    "category": "agents",
+    "body": "As agent context grows across many steps, compress older turns by summarizing completed subtasks and discarding raw tool outputs that have already been acted on. Retain only conclusions and pending action items. This keeps token counts manageable without losing goal-critical information.",
+    "embedding": [0.15, 0.35, 0.60, 0.45]
+  },
+  {
+    "id": 21,
+    "title": "Episodic memory for LLM sessions",
+    "category": "memory",
+    "body": "Store discrete conversation episodes as timestamped records with topic tags and entity mentions. Retrieve relevant episodes at query time using a combination of recency, importance score, and semantic similarity. Episodic memory lets the system refer to events from days-old sessions without bloating the active context window.",
+    "embedding": [0.10, 0.93, 0.09, 0.10]
+  },
+  {
+    "id": 22,
+    "title": "Sliding-window context management",
+    "category": "memory",
+    "body": "Maintain a fixed-size context window by evicting the oldest turns when the window fills. Before eviction, summarize the dropped turns and prepend the summary to the kept context. Tune window size and summary quality together—short windows with poor summaries perform worse than longer windows with no summaries.",
+    "embedding": [0.12, 0.90, 0.12, 0.13]
+  },
+  {
+    "id": 23,
+    "title": "Vector-based long-term memory stores",
+    "category": "memory",
+    "body": "Encode conversation fragments as dense vectors and store them in a vector database alongside metadata. At retrieval time, embed the current query and fetch the top-k closest memory fragments. Combine recency-weighted scores with cosine similarity to bias toward recent but still semantically relevant memories.",
+    "embedding": [0.15, 0.85, 0.18, 0.16]
+  },
+  {
+    "id": 24,
+    "title": "Memory compression and hierarchical summarization",
+    "category": "memory",
+    "body": "Build a hierarchy of memory abstractions: raw turns at the bottom, per-session summaries in the middle, and long-term user profiles at the top. Compress upward on session close. When reconstructing context, unpack only the abstraction levels relevant to the current query instead of loading all raw history.",
+    "embedding": [0.18, 0.78, 0.25, 0.20]
+  },
+  {
+    "id": 25,
+    "title": "User preference and profile tracking",
+    "category": "memory",
+    "body": "Extract and persist user preferences—communication style, domain expertise, preferred output format—from conversation signals rather than explicit configuration. Update the profile incrementally after each session. Surface stored preferences to downstream prompts so responses feel personalized without re-asking known facts.",
+    "embedding": [0.22, 0.70, 0.32, 0.25]
+  },
+  {
+    "id": 26,
+    "title": "Memory and retrieval integration patterns",
+    "category": "memory",
+    "body": "Distinguish between short-term working memory (active context window), episodic memory (recent session history), and semantic memory (retrieved knowledge). Route queries to the appropriate memory tier before hitting a large external knowledge base. Combining tiers reduces latency and avoids unnecessary retrieval calls.",
+    "embedding": [0.25, 0.60, 0.48, 0.28]
+  },
+  {
+    "id": 27,
+    "title": "Session handoff and memory transfer protocols",
+    "category": "memory",
+    "body": "When a conversation transitions between agents or model versions, serialize the active memory state into a structured handoff document. The receiving agent reconstructs context by reading the handoff rather than the raw transcript. Standardize the handoff schema so any compliant agent can resume any session.",
+    "embedding": [0.50, 0.45, 0.35, 0.22]
+  },
+  {
+    "id": 28,
+    "title": "Evaluating memory faithfulness and staleness",
+    "category": "memory",
+    "body": "Audit stored memories for factual accuracy by periodically comparing them against authoritative sources or re-asking the user. Detect staleness using time-to-live policies and confidence decay curves. Remove or flag memories that contradict newer session data to prevent confabulated recall.",
+    "embedding": [0.18, 0.42, 0.28, 0.68]
+  },
+  {
+    "id": 29,
+    "title": "Embedding memory into multi-agent loops",
+    "category": "memory",
+    "body": "Provide each agent in a multi-agent system with its own local memory while maintaining a shared global scratchpad. Local memory speeds individual agent reasoning; global memory enables cross-agent coordination. Sync policies control when local writes propagate to the global store.",
+    "embedding": [0.65, 0.38, 0.30, 0.18]
+  },
+  {
+    "id": 30,
+    "title": "Token-efficient context packing",
+    "category": "memory",
+    "body": "Represent conversation history in a compact structured format—key-value pairs for resolved facts, bullet lists for pending actions—instead of verbatim dialogue. Structured context packing cuts token usage by 40-60% on long sessions with no measurable quality loss on factual recall benchmarks.",
+    "embedding": [0.20, 0.25, 0.55, 0.62]
+  },
+  {
+    "id": 31,
+    "title": "Dense passage retrieval for RAG pipelines",
+    "category": "retrieval",
+    "body": "Encode queries and passages independently with a bi-encoder and retrieve candidates via approximate nearest-neighbor search. Fine-tune the encoder on in-domain question-passage pairs to improve recall. ANN indices enable sub-millisecond retrieval across millions of passages at serving time.",
+    "embedding": [0.10, 0.22, 0.93, 0.20]
+  },
+  {
+    "id": 32,
+    "title": "Hybrid BM25 and semantic search",
+    "category": "retrieval",
+    "body": "Fuse sparse BM25 scores with dense embedding similarities using reciprocal rank fusion or a learned interpolation weight. BM25 handles exact keyword matches; semantic search captures paraphrase and concept overlap. The hybrid consistently outperforms either method alone on out-of-domain queries.",
+    "embedding": [0.12, 0.26, 0.90, 0.22]
+  },
+  {
+    "id": 33,
+    "title": "Chunking strategies for document retrieval",
+    "category": "retrieval",
+    "body": "Split documents into overlapping fixed-size chunks to prevent answer spans from being cut at chunk boundaries. Experiment with chunk sizes between 128 and 512 tokens depending on average answer length. Index sentence-window chunks for higher granularity and retrieve the surrounding paragraph for richer context.",
+    "embedding": [0.14, 0.30, 0.85, 0.25]
+  },
+  {
+    "id": 34,
+    "title": "Cross-encoder re-ranking of retrieved passages",
+    "category": "retrieval",
+    "body": "Use a bi-encoder to retrieve a large candidate set cheaply, then re-rank with a slower but more accurate cross-encoder that attends jointly to query and passage. Re-ranking with a cross-encoder on the top 100 candidates typically lifts nDCG@10 by 5-15 points over bi-encoder-only retrieval.",
+    "embedding": [0.18, 0.35, 0.78, 0.30]
+  },
+  {
+    "id": 35,
+    "title": "Multi-index retrieval fusion",
+    "category": "retrieval",
+    "body": "Maintain separate indices for different content types—structured tables, code snippets, prose passages—and merge result lists at query time. Each index uses the best retrieval model for its content type. Fusion weights are tuned per query category to maximize answer coverage across heterogeneous corpora.",
+    "embedding": [0.22, 0.40, 0.70, 0.35]
+  },
+  {
+    "id": 36,
+    "title": "Retrieval with semantic caching",
+    "category": "retrieval",
+    "body": "Cache retrieval results keyed by a hash of the query embedding rather than the raw query string. Queries with cosine similarity above a threshold share cached results, reducing backend load. Invalidate cache entries when the underlying document index is updated or when cached results are no longer fresh.",
+    "embedding": [0.25, 0.55, 0.62, 0.28]
+  },
+  {
+    "id": 37,
+    "title": "Query expansion for improved recall",
+    "category": "retrieval",
+    "body": "Generate synonym expansions, hypothetical document embeddings, or LLM-written pseudo-answers before retrieval. Use the expanded set of query representations to cast a wider retrieval net. Select the final passage set by ranking all candidates from all query variants together rather than merging lists naively.",
+    "embedding": [0.55, 0.25, 0.52, 0.20]
+  },
+  {
+    "id": 38,
+    "title": "Retrieval quality benchmarking",
+    "category": "retrieval",
+    "body": "Measure retrieval quality with recall@k, MRR, and nDCG on a held-out labeled query set. Track metrics across index updates and model upgrades. Plot recall curves against retrieval budget so teams can choose the right trade-off between cost and coverage before shipping pipeline changes.",
+    "embedding": [0.18, 0.28, 0.55, 0.72]
+  },
+  {
+    "id": 39,
+    "title": "Agent-driven iterative retrieval loops",
+    "category": "retrieval",
+    "body": "Allow agents to issue multiple retrieval calls, each informed by what was learned in the previous call. After inspecting initial results the agent reformulates the query, narrows the filter, or pivots to a different index. Iterative retrieval substantially improves answer quality on multi-hop questions.",
+    "embedding": [0.62, 0.30, 0.42, 0.18]
+  },
+  {
+    "id": 40,
+    "title": "Passage embedding fine-tuning",
+    "category": "retrieval",
+    "body": "Adapt a general-purpose embedding model to your domain by fine-tuning on in-domain triplets: query, positive passage, hard negative passage. Hard negatives—passages that look similar to positives but are factually wrong—force the encoder to learn fine-grained distinctions that matter for your use case.",
+    "embedding": [0.20, 0.68, 0.40, 0.30]
+  },
+  {
+    "id": 41,
+    "title": "LLM-as-judge evaluation frameworks",
+    "category": "evaluation",
+    "body": "Use a powerful LLM to score system outputs across dimensions such as correctness, helpfulness, and safety using a structured rubric. Calibrate the judge against human labels to quantify its agreement rate. Run judge evaluations automatically on every deployment candidate to catch quality regressions before users see them.",
+    "embedding": [0.12, 0.08, 0.16, 0.96]
+  },
+  {
+    "id": 42,
+    "title": "RAGAS metrics for RAG pipeline evaluation",
+    "category": "evaluation",
+    "body": "Apply the RAGAS suite—faithfulness, answer relevance, context recall, context precision—to measure each component of a RAG system independently. Faithfulness detects hallucinations relative to retrieved context; context recall measures whether the retriever found the needed passages. Use these metrics to isolate whether failures stem from retrieval or generation.",
+    "embedding": [0.14, 0.10, 0.20, 0.93]
+  },
+  {
+    "id": 43,
+    "title": "Automated regression test suites for LLM systems",
+    "category": "evaluation",
+    "body": "Curate a golden dataset of inputs, expected outputs, and evaluation criteria. Run the suite in CI on every model or prompt change. Flag any test whose score drops below its baseline by more than a configurable delta. Over time the golden set accumulates edge cases discovered from production incidents.",
+    "embedding": [0.16, 0.12, 0.24, 0.88]
+  },
+  {
+    "id": 44,
+    "title": "Latency and throughput benchmarking",
+    "category": "evaluation",
+    "body": "Measure p50, p95, and p99 latency under realistic load profiles using replay of production traffic distributions. Track time-to-first-token separately from total generation time. Benchmark both cold-start and warm cache scenarios. Use results to set SLA targets and identify bottlenecks in the inference stack.",
+    "embedding": [0.20, 0.15, 0.30, 0.80]
+  },
+  {
+    "id": 45,
+    "title": "Hallucination detection and scoring",
+    "category": "evaluation",
+    "body": "Classify model outputs as supported, unsupported, or contradicted relative to source documents. Train a dedicated hallucination detector on a labeled dataset of grounded and fabricated claims. Deploy the detector as an output guardrail that downgrades or flags responses exceeding a hallucination rate threshold.",
+    "embedding": [0.25, 0.18, 0.38, 0.72]
+  },
+  {
+    "id": 46,
+    "title": "Evaluation dataset curation and labeling",
+    "category": "evaluation",
+    "body": "Build evaluation sets by stratified sampling across query types, domains, and difficulty levels. Use active learning to prioritize labeling examples near the decision boundary where the system struggles most. Inter-annotator agreement thresholds ensure only high-quality labels enter the benchmark.",
+    "embedding": [0.18, 0.25, 0.55, 0.62]
+  },
+  {
+    "id": 47,
+    "title": "A/B testing model variants in production",
+    "category": "evaluation",
+    "body": "Route a fraction of live traffic to a challenger model while the rest goes to the incumbent. Collect implicit feedback signals—thumbs up, session length, follow-up rate—alongside explicit ratings. Use statistical significance testing to determine whether observed quality differences exceed noise before promoting the challenger.",
+    "embedding": [0.60, 0.18, 0.28, 0.50]
+  },
+  {
+    "id": 48,
+    "title": "Memory quality and recall assessment",
+    "category": "evaluation",
+    "body": "Evaluate long-term memory systems by inserting facts into sessions then probing for recall in later sessions. Measure precision and recall of retrieved memories against a ground-truth annotation. Audit retrieved memories for temporal consistency—facts stated early in a session should not contradict facts from later turns.",
+    "embedding": [0.18, 0.65, 0.22, 0.48]
+  },
+  {
+    "id": 49,
+    "title": "Agent task completion and efficiency metrics",
+    "category": "evaluation",
+    "body": "Define success criteria for agent tasks as a combination of outcome correctness, step count, and tool call accuracy. Track success rate across task categories and log failed tool calls with error types. Monitor average steps-to-completion over time; increases signal that the agent is taking less efficient paths.",
+    "embedding": [0.62, 0.28, 0.22, 0.42]
+  },
+  {
+    "id": 50,
+    "title": "Cost-performance trade-off analysis",
+    "category": "evaluation",
+    "body": "Map each workflow variant onto a cost-quality Pareto frontier by plotting quality scores against token costs. Identify dominated variants that are both more expensive and lower quality. Use the frontier to guide decisions about when to use expensive large models versus cheaper small ones for a given task category.",
+    "embedding": [0.20, 0.35, 0.65, 0.35]
+  },
+  {
+    "id": 51,
+    "title": "LLM workflow orchestration patterns",
+    "category": "orchestration",
+    "body": "Compose sequences of LLM calls, tool invocations, and conditional branches into declarative workflow definitions. Separate the orchestration logic from individual step implementations so steps can be tested in isolation. Orchestrators should handle retries, timeouts, and partial failure recovery transparently.",
+    "embedding": [0.87, 0.18, 0.19, 0.07]
+  },
+  {
+    "id": 52,
+    "title": "DAG-based pipeline execution",
+    "category": "orchestration",
+    "body": "Model workflows as directed acyclic graphs where each node is a step and edges represent data dependencies. Execute nodes in topological order, parallelizing independent branches. A DAG representation makes it easy to visualize execution paths, detect cycles at validation time, and replay partial pipelines on failure.",
+    "embedding": [0.84, 0.22, 0.22, 0.09]
+  },
+  {
+    "id": 53,
+    "title": "Parallel agent coordination in orchestrated systems",
+    "category": "orchestration",
+    "body": "Fan out sub-tasks to a pool of specialized agents running in parallel, then aggregate their outputs in a reduce step. Use barrier synchronization points to wait for all agents to complete before proceeding. Handle partial failures by substituting cached or default outputs for timed-out agents rather than failing the whole pipeline.",
+    "embedding": [0.79, 0.25, 0.28, 0.12]
+  },
+  {
+    "id": 54,
+    "title": "Retry and compensation strategies",
+    "category": "orchestration",
+    "body": "Apply exponential back-off with jitter for transient LLM API failures. For idempotent steps, retry unconditionally up to a limit. For non-idempotent steps, implement compensating transactions that undo partial side effects before retrying from a safe checkpoint.",
+    "embedding": [0.72, 0.30, 0.32, 0.16]
+  },
+  {
+    "id": 55,
+    "title": "Event-driven orchestration with message queues",
+    "category": "orchestration",
+    "body": "Decouple workflow steps by passing state through a message queue instead of direct function calls. Each step consumes from its input queue and publishes to its output queue, enabling independent scaling and fault isolation. Event-driven designs simplify adding new steps without modifying existing step code.",
+    "embedding": [0.65, 0.28, 0.30, 0.20]
+  },
+  {
+    "id": 56,
+    "title": "Streaming responses in orchestrated pipelines",
+    "category": "orchestration",
+    "body": "Propagate token-streaming from inner LLM calls through the orchestration layer to the client to minimize perceived latency. Buffer only as much as needed to apply output guardrails without holding up the stream. Backpressure signals from the client should pause upstream generation to prevent buffer overflow.",
+    "embedding": [0.58, 0.25, 0.38, 0.28]
+  },
+  {
+    "id": 57,
+    "title": "Observability and tracing in orchestrated workflows",
+    "category": "orchestration",
+    "body": "Instrument each workflow step with distributed trace spans that capture inputs, outputs, latency, and token counts. Correlate spans with a single trace ID across the full request lifetime. Export traces to an observability backend so engineers can reconstruct the exact execution path for any failed or slow request.",
+    "embedding": [0.48, 0.22, 0.32, 0.55]
+  },
+  {
+    "id": 58,
+    "title": "Memory-aware orchestration for long conversations",
+    "category": "orchestration",
+    "body": "Integrate a memory management step at the start of each workflow invocation that loads relevant session context, compresses stale history, and primes the prompt. Treat memory operations as first-class workflow steps with their own retry logic and latency budgets rather than inlining them into prompt construction.",
+    "embedding": [0.42, 0.60, 0.28, 0.25]
+  },
+  {
+    "id": 59,
+    "title": "Retrieval-orchestration coupling strategies",
+    "category": "orchestration",
+    "body": "Position retrieval steps early in the workflow DAG so that all downstream steps benefit from grounded context. For multi-turn workflows, decide per turn whether to re-retrieve or reuse the previous retrieval result based on topic drift detection. Avoid redundant retrieval calls by caching results at the workflow scope.",
+    "embedding": [0.25, 0.28, 0.68, 0.38]
+  },
+  {
+    "id": 60,
+    "title": "Cost management in orchestrated LLM workflows",
+    "category": "orchestration",
+    "body": "Track cumulative token spend per workflow execution and enforce per-request cost caps at the orchestration layer. Route cost-sensitive queries to smaller models and reserve large models for high-value or high-complexity steps identified at planning time. Report cost attribution per workflow step for fine-grained optimization.",
+    "embedding": [0.18, 0.22, 0.45, 0.72]
+  }
 ]
