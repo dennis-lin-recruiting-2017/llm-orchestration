@@ -69,11 +69,11 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPopState)
   }, [])
 
-  async function runSearch(q: string) {
+  async function runSearch(q: string, type: "vector" | "keyword" = "vector") {
     setSearchLoading(true)
     try {
       const data = await getJSON<{ mode: string; results: Document[] }>(
-        `${apiBaseURL}/api/search?q=${encodeURIComponent(q)}`
+        `${apiBaseURL}/api/search?q=${encodeURIComponent(q)}&mode=${type}`
       )
       setSearchMode(data.mode)
       setSearchResults(data.results)
@@ -84,7 +84,7 @@ export default function App() {
     }
   }
 
-  function onSearch() { runSearch(query) }
+  function onSearch(type: "vector" | "keyword") { runSearch(query, type) }
 
   function onNavigate(path: AppRoute) {
     if (path === route) return
@@ -113,7 +113,7 @@ export default function App() {
   } else if (route === "/about") {
     page = <AboutPage />
   } else if (route === "/workspace") {
-    page = <WorkspacePage cfg={{ webBaseURL: window.location.origin, apiBaseURL }} query={query} mode={searchMode} loading={searchLoading} results={searchResults} documents={demoDocuments} onQueryChange={setQuery} onSearch={onSearch} onChip={(chip) => { setQuery(chip); runSearch(chip) }} />
+    page = <WorkspacePage cfg={{ webBaseURL: window.location.origin, apiBaseURL }} query={query} mode={searchMode} loading={searchLoading} results={searchResults} onQueryChange={setQuery} onSearch={onSearch} onChip={(chip, type) => { setQuery(chip); runSearch(chip, type) }} />
   } else if (route === "/prompt-templates") {
     page = <VersionedEditorPage apiBaseURL={apiBaseURL} apiPath="/api/templates" title="Prompt templates" typed={false} />
   } else if (route === "/input-guardrails") {

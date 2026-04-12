@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -168,27 +169,160 @@ func (s *Server) HandleDocuments(w http.ResponseWriter, _ *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]any{"documents": docs})
 }
 
+// tokenize splits text into lowercase words, stripping punctuation.
+func tokenize(s string) map[string]bool {
+	words := make(map[string]bool)
+	for _, w := range strings.Fields(strings.ToLower(s)) {
+		w = strings.Trim(w, ".,!?;:\"'()-")
+		if len(w) > 1 {
+			words[w] = true
+		}
+	}
+	return words
+}
+
+// queryEmbedding builds a query vector for any freeform string:
+//  1. Exact keyword map match.
+//  2. Average known-keyword vectors whose keyword appears in q.
+//  3. Weighted average of all document embeddings by word-overlap with q.
+func (s *Server) queryEmbedding(q string) []float64 {
+	ql := strings.ToLower(strings.TrimSpace(q))
+	if emb, ok := s.DocsByQuery[ql]; ok {
+		return emb
+	}
+
+	// Try blending any known keyword vectors present in the query.
+	var kwSum []float64
+	kwCount := 0
+	for kw, emb := range s.DocsByQuery {
+		if strings.Contains(ql, kw) {
+			if kwSum == nil {
+				kwSum = make([]float64, len(emb))
+			}
+			for i, v := range emb {
+				kwSum[i] += v
+			}
+			kwCount++
+		}
+	}
+	if kwCount > 0 {
+		for i := range kwSum {
+			kwSum[i] /= float64(kwCount)
+		}
+		return kwSum
+	}
+
+	// Freeform: weighted average of document embeddings by token overlap.
+	queryTokens := tokenize(q)
+	if len(queryTokens) == 0 {
+		return nil
+	}
+	var dim int
+	for _, d := range s.Docs {
+		if len(d.Embedding) > 0 {
+			dim = len(d.Embedding)
+			break
+		}
+	}
+	if dim == 0 {
+		return nil
+	}
+	result := make([]float64, dim)
+	totalWeight := 0.0
+	for _, d := range s.Docs {
+		docTokens := tokenize(d.Title + " " + d.Body + " " + d.Category)
+		overlap := 0
+		for w := range queryTokens {
+			if docTokens[w] {
+				overlap++
+			}
+		}
+		if overlap == 0 {
+			continue
+		}
+		weight := float64(overlap)
+		totalWeight += weight
+		for i, v := range d.Embedding {
+			result[i] += v * weight
+		}
+	}
+	if totalWeight == 0 {
+		return nil
+	}
+	for i := range result {
+		result[i] /= totalWeight
+	}
+	return result
+}
+
+func (s *Server) keywordSearch(q string) []models.Document {
+	ql := strings.ToLower(q)
+	tokens := tokenize(q)
+	type scored struct {
+		doc   models.Document
+		score int
+	}
+	var hits []scored
+	for _, d := range s.Docs {
+		tl := strings.ToLower(d.Title)
+		bl := strings.ToLower(d.Body)
+		cl := strings.ToLower(d.Category)
+		// Phrase-level scoring
+		score := 0
+		if strings.Contains(tl, ql) {
+			score += 4
+		}
+		if strings.Contains(bl, ql) {
+			score += 2
+		}
+		if strings.Contains(cl, ql) {
+			score += 1
+		}
+		// Token-level scoring for multi-word queries
+		for tok := range tokens {
+			if strings.Contains(tl, tok) {
+				score += 2
+			}
+			if strings.Contains(bl, tok) {
+				score += 1
+			}
+		}
+		if score == 0 {
+			continue
+		}
+		item := d
+		item.Embedding = nil
+		// Express relevance as a distance in [0,1): higher score → lower distance.
+		item.Distance = 1.0 / float64(1+score)
+		hits = append(hits, scored{doc: item, score: score})
+	}
+	sort.Slice(hits, func(i, j int) bool { return hits[i].score > hits[j].score })
+	results := make([]models.Document, len(hits))
+	for i, h := range hits {
+		results[i] = h.doc
+	}
+	return results
+}
+
 func (s *Server) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	mode := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("mode")))
 	if q == "" {
-		WriteJSON(w, http.StatusOK, map[string]any{"query": q, "mode": "keyword-fallback", "results": []models.Document{}})
-		return
-	}
-	if emb, ok := s.DocsByQuery[strings.ToLower(q)]; ok {
-		WriteJSON(w, http.StatusOK, map[string]any{"query": q, "mode": "vector", "results": TopVectorMatches(s.Docs, emb, 5)})
+		WriteJSON(w, http.StatusOK, map[string]any{"query": q, "mode": mode, "results": []models.Document{}})
 		return
 	}
 
-	ql := strings.ToLower(q)
-	results := make([]models.Document, 0, 5)
-	for _, d := range s.Docs {
-		if strings.Contains(strings.ToLower(d.Title), ql) || strings.Contains(strings.ToLower(d.Body), ql) || strings.Contains(strings.ToLower(d.Category), ql) {
-			item := d
-			item.Embedding = nil
-			results = append(results, item)
-		}
+	if mode == "keyword" {
+		WriteJSON(w, http.StatusOK, map[string]any{"query": q, "mode": "keyword", "results": s.keywordSearch(q)})
+		return
 	}
-	WriteJSON(w, http.StatusOK, map[string]any{"query": q, "mode": "keyword-fallback", "results": results})
+
+	// vector mode (default)
+	if emb := s.queryEmbedding(q); emb != nil {
+		WriteJSON(w, http.StatusOK, map[string]any{"query": q, "mode": "vector", "results": TopVectorMatches(s.Docs, emb, 10)})
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"query": q, "mode": "vector-no-embedding", "results": []models.Document{}})
 }
 
 func (s *Server) HandleVersionedCollection(st *store.JSONStore[models.VersionedItem], typed bool) http.HandlerFunc {
@@ -793,19 +927,10 @@ func (s *Server) searchDocs(q string) []models.Document {
 	if q == "" {
 		return []models.Document{}
 	}
-	if emb, ok := s.DocsByQuery[strings.ToLower(q)]; ok {
+	if emb := s.queryEmbedding(q); emb != nil {
 		return TopVectorMatches(s.Docs, emb, 5)
 	}
-	ql := strings.ToLower(q)
-	results := make([]models.Document, 0, 5)
-	for _, d := range s.Docs {
-		if strings.Contains(strings.ToLower(d.Title), ql) || strings.Contains(strings.ToLower(d.Body), ql) || strings.Contains(strings.ToLower(d.Category), ql) {
-			item := d
-			item.Embedding = nil
-			results = append(results, item)
-		}
-	}
-	return results
+	return s.keywordSearch(q)
 }
 
 // searchResultStrings converts documents into a slice of formatted strings,
