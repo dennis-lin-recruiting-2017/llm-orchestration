@@ -102,6 +102,7 @@ func (s *Server) APIMux() *http.ServeMux {
 	mux.HandleFunc("/api/output-guardrails", s.HandleVersionedCollection(s.Outputs, true))
 	mux.HandleFunc("/api/output-guardrails/", s.HandleVersionedItem(s.Outputs, true))
 	mux.HandleFunc("/api/llm-connections", s.HandleLLMConnections)
+	mux.HandleFunc("/api/llm-connections/ping", s.HandleLLMPing)
 	mux.HandleFunc("/api/workflow-logs", s.HandleWorkflowLogs)
 	mux.HandleFunc("/api/workflow-logs/", s.HandleWorkflowLogDetail)
 	mux.HandleFunc("/api/workflows", s.HandleWorkflowCollection)
@@ -471,6 +472,54 @@ func (s *Server) HandleLLMConnections(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleLLMPing checks whether the configured LLM server is reachable by
+// issuing a GET /v1/models request with a short timeout.
+func (s *Server) HandleLLMPing(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w)
+		return
+	}
+	conn, ok := s.activeLLMConn()
+	if !ok {
+		WriteJSON(w, http.StatusOK, map[string]any{
+			"reachable": false,
+			"endpoint":  "",
+			"model":     "",
+			"error":     "no LLM connection configured",
+		})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, conn.BaseURL+"/v1/models", nil)
+	if err != nil {
+		WriteJSON(w, http.StatusOK, map[string]any{
+			"reachable": false,
+			"endpoint":  conn.BaseURL,
+			"model":     conn.Model,
+			"error":     err.Error(),
+		})
+		return
+	}
+	resp, err := llm.DefaultClient.Do(req)
+	if err != nil {
+		WriteJSON(w, http.StatusOK, map[string]any{
+			"reachable": false,
+			"endpoint":  conn.BaseURL,
+			"model":     conn.Model,
+			"error":     err.Error(),
+		})
+		return
+	}
+	resp.Body.Close()
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"reachable": true,
+		"endpoint":  conn.BaseURL,
+		"model":     conn.Model,
+		"error":     nil,
+	})
+}
+
 func (s *Server) HandleWorkflowCollection(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -742,6 +791,7 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 		inputPayload["query"] = resolvedQuery
 
 		inputGuardrailDebug := make(map[string]models.GuardrailDebugResult)
+		inputBlocked := false
 		for _, gr := range selectedGuardrails(wf.InputGuardrailIDs, inputs) {
 			grStart := time.Now()
 			result, err := s.Runtime.ExecuteDetail(ctx, gr, inputPayload, "")
@@ -749,6 +799,9 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 			entry := models.GuardrailDebugResult{Passed: result.Passed, Engine: result.Engine, Detail: result.Detail, DurationMs: float64(grUs) / 1000.0}
 			if err != nil {
 				entry = models.GuardrailDebugResult{Passed: false, Engine: result.Engine, Detail: err.Error(), DurationMs: float64(grUs) / 1000.0}
+			}
+			if !entry.Passed {
+				inputBlocked = true
 			}
 			inputGuardrailDebug[gr.Name] = entry
 			if s.LogDB != nil {
@@ -758,7 +811,7 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		// Fill prompt template and call LLM.
+		// Fill prompt template and call LLM — skipped when an input guardrail blocked.
 		s.Templates.Mu.RLock()
 		_, promptContent := activePromptVersion(wf.PromptTemplateID, s.Templates.Data)
 		s.Templates.Mu.RUnlock()
@@ -766,20 +819,22 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 		var llmOutput, finalPrompt string
 		var inferenceDurationUs int64
 		var inferenceEndpoint, inferenceModel string
-		if conn, ok := s.activeLLMConn(); ok && promptContent != "" {
-			inferenceEndpoint = conn.BaseURL
-			inferenceModel = conn.Model
-			finalPrompt = strings.ReplaceAll(promptContent, "{{text}}", req.Text)
-			finalPrompt = strings.ReplaceAll(finalPrompt, "{{query}}", resolvedQuery)
-			inferenceStart := time.Now()
-			result, err := llm.Chat(ctx, conn.BaseURL, conn.Model, []llm.Message{
-				{Role: "user", Content: finalPrompt},
-			})
-			inferenceDurationUs = time.Since(inferenceStart).Microseconds()
-			if err != nil {
-				log.Printf("workflow LLM inference: %v", err)
-			} else {
-				llmOutput = result
+		if !inputBlocked {
+			if conn, ok := s.activeLLMConn(); ok && promptContent != "" {
+				inferenceEndpoint = conn.BaseURL
+				inferenceModel = conn.Model
+				finalPrompt = strings.ReplaceAll(promptContent, "{{text}}", req.Text)
+				finalPrompt = strings.ReplaceAll(finalPrompt, "{{query}}", resolvedQuery)
+				inferenceStart := time.Now()
+				result, err := llm.Chat(ctx, conn.BaseURL, conn.Model, []llm.Message{
+					{Role: "user", Content: finalPrompt},
+				})
+				inferenceDurationUs = time.Since(inferenceStart).Microseconds()
+				if err != nil {
+					log.Printf("workflow LLM inference: %v", err)
+				} else {
+					llmOutput = result
+				}
 			}
 		}
 		if s.LogDB != nil {
@@ -789,20 +844,31 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 		}
 
 		outputGuardrailDebug := make(map[string]models.GuardrailDebugResult)
-		for _, gr := range selectedGuardrails(wf.OutputGuardrailIDs, outputs) {
-			grStart := time.Now()
-			result, err := s.Runtime.ExecuteDetail(ctx, gr, inputPayload, llmOutput)
-			grUs := time.Since(grStart).Microseconds()
-			entry := models.GuardrailDebugResult{Passed: result.Passed, Engine: result.Engine, Detail: result.Detail, DurationMs: float64(grUs) / 1000.0}
-			if err != nil {
-				entry = models.GuardrailDebugResult{Passed: false, Engine: result.Engine, Detail: err.Error(), DurationMs: float64(grUs) / 1000.0}
-			}
-			outputGuardrailDebug[gr.Name] = entry
-			if s.LogDB != nil {
-				if err := s.LogDB.InsertOutputGuardrailResult(requestID, wf.ID, gr.ID, gr.Type, entry.Passed, entry.Engine, entry.Detail, entry.DurationMs); err != nil {
-					log.Printf("log output guardrail result: %v", err)
+		outputBlocked := false
+		if !inputBlocked {
+			for _, gr := range selectedGuardrails(wf.OutputGuardrailIDs, outputs) {
+				grStart := time.Now()
+				result, err := s.Runtime.ExecuteDetail(ctx, gr, inputPayload, llmOutput)
+				grUs := time.Since(grStart).Microseconds()
+				entry := models.GuardrailDebugResult{Passed: result.Passed, Engine: result.Engine, Detail: result.Detail, DurationMs: float64(grUs) / 1000.0}
+				if err != nil {
+					entry = models.GuardrailDebugResult{Passed: false, Engine: result.Engine, Detail: err.Error(), DurationMs: float64(grUs) / 1000.0}
+				}
+				if !entry.Passed {
+					outputBlocked = true
+				}
+				outputGuardrailDebug[gr.Name] = entry
+				if s.LogDB != nil {
+					if err := s.LogDB.InsertOutputGuardrailResult(requestID, wf.ID, gr.ID, gr.Type, entry.Passed, entry.Engine, entry.Detail, entry.DurationMs); err != nil {
+						log.Printf("log output guardrail result: %v", err)
+					}
 				}
 			}
+		}
+
+		status := "accepted"
+		if inputBlocked || outputBlocked {
+			status = "rejected"
 		}
 
 		resp := models.WorkflowInvokeResponse{
@@ -813,7 +879,7 @@ func (s *Server) HandleWorkflowEndpoint(w http.ResponseWriter, r *http.Request) 
 			OutputGuardrails:      append([]string(nil), wf.OutputGuardrailIDs...),
 			InputTypes:            s.guardrailTypes(wf.InputGuardrailIDs, inputs),
 			OutputTypes:           s.guardrailTypes(wf.OutputGuardrailIDs, outputs),
-			Status:                "accepted",
+			Status:                status,
 			Echo:                  req.Text,
 			LLMOutput:             llmOutput,
 			Metadata: models.WorkflowMetadata{

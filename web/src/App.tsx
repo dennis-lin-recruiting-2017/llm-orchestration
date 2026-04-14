@@ -56,10 +56,18 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<Document[]>(demoDocuments)
   const [searchMode, setSearchMode] = useState("demo")
   const [searchLoading, setSearchLoading] = useState(false)
+  const [llmStatus, setLlmStatus] = useState<{ reachable: boolean; endpoint: string; error: string } | null>(null)
+  const [llmBannerDismissed, setLlmBannerDismissed] = useState(false)
 
   useEffect(() => {
     getJSON<AppConfig>("/config.json")
-      .then((cfg) => setApiBaseURL(cfg.apiBaseURL))
+      .then((cfg) => {
+        setApiBaseURL(cfg.apiBaseURL)
+        return getJSON<{ reachable: boolean; endpoint: string; model: string; error: string | null }>(
+          `${cfg.apiBaseURL}/api/llm-connections/ping`
+        )
+      })
+      .then((ping) => setLlmStatus({ reachable: ping.reachable, endpoint: ping.endpoint, error: ping.error ?? "" }))
       .catch(() => {/* keep default */})
   }, [])
 
@@ -86,10 +94,23 @@ export default function App() {
 
   function onSearch(type: "vector" | "keyword") { runSearch(query, type) }
 
+  function checkLlm(base: string) {
+    getJSON<{ reachable: boolean; endpoint: string; model: string; error: string | null }>(
+      `${base}/api/llm-connections/ping`
+    )
+      .then((ping) => {
+        setLlmStatus({ reachable: ping.reachable, endpoint: ping.endpoint, error: ping.error ?? "" })
+        setLlmBannerDismissed(false)
+      })
+      .catch(() => {})
+  }
+
   function onNavigate(path: AppRoute) {
     if (path === route) return
     window.history.pushState({}, "", path)
     setRoute(path)
+    // Re-check LLM connectivity when leaving the connections page so the banner updates.
+    if (route === "/llm-connections") checkLlm(apiBaseURL)
   }
 
   // Pages rendered inside the Home drawer layout
@@ -135,8 +156,23 @@ export default function App() {
     </div>
   ) : page
 
+  const showLlmWarning = llmStatus !== null && !llmStatus.reachable && !llmBannerDismissed
+
   return (
     <AppShell route={route} onNavigate={onNavigate} topNav={<TopNav route={route} onNavigate={onNavigate} />}>
+      {showLlmWarning && (
+        <div className="llm-warning-banner">
+          <span>
+            LLM server unreachable at <strong>{llmStatus!.endpoint || "—"}</strong>.
+            {llmStatus!.error ? ` ${llmStatus!.error}` : ""}{" "}
+            Workflows requiring inference will not produce output.{" "}
+            <button type="button" className="link-btn" onClick={() => onNavigate("/llm-connections")}>
+              Update connection
+            </button>
+          </span>
+          <button type="button" className="llm-warning-dismiss" onClick={() => setLlmBannerDismissed(true)} aria-label="Dismiss">✕</button>
+        </div>
+      )}
       {content}
     </AppShell>
   )

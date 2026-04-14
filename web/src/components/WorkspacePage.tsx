@@ -36,6 +36,15 @@ export function WorkspacePage(props: Props) {
   const hasResults = props.results.length > 0
   const searchedIds = new Set(props.results.map((d) => d.id))
 
+  // Sort all articles so matched results appear first in relevance order,
+  // followed by unmatched articles in their original corpus order.
+  const sortedDocs = hasResults
+    ? [
+        ...props.results.map((r) => allDocs.find((d) => d.id === r.id)).filter((d): d is Document => d !== undefined),
+        ...allDocs.filter((d) => !searchedIds.has(d.id)),
+      ]
+    : allDocs
+
   function handleSearch() { props.onSearch(searchType) }
   function handleChip(chip: string) { props.onChip(chip, searchType) }
 
@@ -99,7 +108,7 @@ export function WorkspacePage(props: Props) {
         <section className="card">
           <h2>All articles ({allDocs.length})</h2>
           <div className="results scroll-pane">
-            {allDocs.map((d) => {
+            {sortedDocs.map((d) => {
               const match = props.results.find((r) => r.id === d.id)
               return (
                 <article className={`result-item${match ? " run-result-pass" : ""}`} key={d.id}>

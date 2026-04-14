@@ -7,7 +7,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -62,6 +64,10 @@ func Chat(ctx context.Context, baseURL, model string, messages []Message) (strin
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		if len(body) > 0 {
+			return "", fmt.Errorf("llm: unexpected status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		}
 		return "", fmt.Errorf("llm: unexpected status %s", resp.Status)
 	}
 

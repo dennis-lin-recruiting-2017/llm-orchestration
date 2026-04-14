@@ -97,3 +97,9 @@ label { display: grid; gap: 0.5rem; margin-top: 1rem; color: #c6d2f5; }
 .run-result-pass { border-color: #3d8c5a !important; color: #7fffa8 !important; }
 .run-result-fail { border-color: #8c3d3d !important; color: #ffb3b3 !important; }
 .run-result-error { border-color: #8c6a1a !important; color: #ffd480 !important; }
+
+.llm-warning-banner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: #3d2800; border: 1px solid #b06000; border-radius: 12px; padding: 0.65rem 1rem; margin: 0 auto 0.75rem; max-width: 1280px; color: #ffd480; font-size: 0.9rem; }
+.llm-warning-banner strong { color: #ffb347; }
+.llm-warning-dismiss { background: transparent; border: 1px solid #b06000; color: #ffd480; padding: 0.2rem 0.55rem; border-radius: 8px; font-size: 0.8rem; flex-shrink: 0; }
+.llm-warning-dismiss:hover { background: rgba(255,180,0,0.12); }
+.link-btn { background: transparent; border: 0; padding: 0; color: #7aa2ff; text-decoration: underline; font-size: inherit; cursor: pointer; border-radius: 0; }
