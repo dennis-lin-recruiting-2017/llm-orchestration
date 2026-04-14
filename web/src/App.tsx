@@ -4,7 +4,6 @@ import CloseIcon from "@mui/icons-material/Close"
 import { getJSON } from "./lib/api"
 import { AboutPage } from "./components/Home/AboutPage"
 import { AppShell } from "./components/AppShell"
-import { DrawerNav } from "./components/DrawerNav"
 import { GuardrailsJavascriptPage } from "./components/Home/GuardrailsJavascriptPage"
 import { GuardrailsLLMPage } from "./components/Home/GuardrailsLLMPage"
 import { GuardrailsPythonPage } from "./components/Home/GuardrailsPythonPage"
@@ -13,7 +12,6 @@ import { HowToWorkflowLogsPage } from "./components/Home/HowToWorkflowLogsPage"
 import { HowToWorkflowsPage } from "./components/Home/HowToWorkflowsPage"
 import { LLMConnectionsPage } from "./components/LLMConnectionsPage"
 import { OverviewPage } from "./components/Home/OverviewPage"
-import { TopNav } from "./components/TopNav"
 import { VersionedEditorPage } from "./components/VersionedEditorPage"
 import { WorkflowLogViewerPage } from "./components/WorkflowLogViewerPage"
 import { WorkflowsPage } from "./components/WorkflowsPage"
@@ -117,9 +115,6 @@ export default function App() {
     if (route === "/llm-connections") checkLlm(apiBaseURL)
   }
 
-  // Pages rendered inside the Home drawer layout
-  const isHomeTab = route === "/" || route.startsWith("/how-to-use/") || route === "/about"
-
   let page
   if (route === "/") {
     page = <OverviewPage />
@@ -153,17 +148,10 @@ export default function App() {
     page = <WorkflowLogViewerPage apiBaseURL={apiBaseURL} />
   }
 
-  const content = isHomeTab ? (
-    <Box sx={{ display: "flex", gap: 2 }}>
-      <DrawerNav route={route} onNavigate={onNavigate} />
-      {page}
-    </Box>
-  ) : page
-
   const showLlmWarning = llmStatus !== null && !llmStatus.reachable && !llmBannerDismissed
 
   return (
-    <AppShell route={route} onNavigate={onNavigate} topNav={<TopNav route={route} onNavigate={onNavigate} />}>
+    <AppShell route={route} onNavigate={onNavigate}>
       {showLlmWarning && (
         <Alert
           severity="warning"
@@ -187,7 +175,7 @@ export default function App() {
           </Box>
         </Alert>
       )}
-      {content}
+      {page}
     </AppShell>
   )
 }
