@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, type ReactNode } from "react"
 import {
   Box, Button, Card, CardContent, Chip, CircularProgress, Grid, Stack,
-  TextField, Typography,
+  TextField, Tooltip, Typography,
 } from "@mui/material"
 import { getJSON } from "../lib/api"
 import type { Document } from "../lib/types"
@@ -20,6 +20,14 @@ type Props = {
 }
 
 const chips = ["routing", "agents", "memory", "retrieval", "evaluation", "orchestration"]
+
+function HelpedField({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Tooltip title={title} arrow placement="top-start">
+      <Box>{children}</Box>
+    </Tooltip>
+  )
+}
 
 function DocCard({ doc, match }: { doc: Document; match?: Document }) {
   return (
@@ -80,21 +88,29 @@ export function WorkspacePage(props: Props) {
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 700 }} gutterBottom>Semantic search</Typography>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 1 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  value={props.query}
-                  onChange={(e) => props.onQueryChange(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && props.onSearch(searchType)}
-                  placeholder="Search"
-                />
-                <Button variant="contained" onClick={() => { setSearchType("vector"); props.onSearch("vector") }}>Vector</Button>
-                <Button variant="outlined" onClick={() => { setSearchType("keyword"); props.onSearch("keyword") }}>Keyword</Button>
+                <HelpedField title="Enter the text to search the document corpus. Press Enter or use Vector or Keyword to run the selected search.">
+                  <TextField
+                    fullWidth
+                    size="small"
+                    value={props.query}
+                    onChange={(e) => props.onQueryChange(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && props.onSearch(searchType)}
+                    placeholder="Search"
+                  />
+                </HelpedField>
+                <Tooltip title="Run semantic search. This ranks articles by embedding similarity when embeddings are available." arrow>
+                  <Button variant="contained" onClick={() => { setSearchType("vector"); props.onSearch("vector") }}>Vector</Button>
+                </Tooltip>
+                <Tooltip title="Run keyword search. This is useful for exact terms, categories, and searches without vector embeddings." arrow>
+                  <Button variant="outlined" onClick={() => { setSearchType("keyword"); props.onSearch("keyword") }}>Keyword</Button>
+                </Tooltip>
               </Stack>
 
               <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mb: 1.5 }}>
                 {chips.map((chip) => (
-                  <Chip key={chip} label={chip} clickable size="small" variant="outlined" color="primary" onClick={() => props.onChip(chip, searchType)} />
+                  <Tooltip key={chip} title={`Search for ${chip} using the current search mode.`} arrow>
+                    <Chip label={chip} clickable size="small" variant="outlined" color="primary" onClick={() => props.onChip(chip, searchType)} />
+                  </Tooltip>
                 ))}
               </Box>
 

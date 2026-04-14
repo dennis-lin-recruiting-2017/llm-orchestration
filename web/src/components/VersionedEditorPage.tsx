@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import {
   Box, Button, Card, CardContent, Chip, Grid,
-  MenuItem, Stack, TextField, Typography,
+  MenuItem, Stack, TextField, Tooltip, Typography,
 } from "@mui/material"
 import { getJSON } from "../lib/api"
 import { fetchFormattedSearchResults } from "../lib/search"
@@ -10,6 +10,14 @@ import type { VersionedItem } from "../lib/types"
 type Props = { apiBaseURL: string; apiPath: string; title: string; typed: boolean }
 type RunResult = { passed: boolean; engine: string; detail: string; error: string | null }
 type TemplateResult = { output: string; error: string | null }
+
+function HelpedField({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Tooltip title={title} arrow placement="top-start">
+      <Box>{children}</Box>
+    </Tooltip>
+  )
+}
 
 export function VersionedEditorPage({ apiBaseURL, apiPath, title, typed }: Props) {
   const [items, setItems] = useState<VersionedItem[]>([])
@@ -141,6 +149,17 @@ export function VersionedEditorPage({ apiBaseURL, apiPath, title, typed }: Props
     }
   }
 
+  function contentHelp() {
+    if (!typed) return "Edit the prompt template content. Use {{query}} for retrieved context and {{text}} for the user prompt when the workflow renders this template."
+    switch (selectedType) {
+      case "CustomJavaScript": return "Write JavaScript that evaluates the text. The script can inspect input.text and output, and should return true to pass or false to fail."
+      case "CustomPython": return "Write Python that evaluates the text. The script can inspect input['text'] and output, and should return True to pass or False to fail."
+      case "Regex": return "Enter the regular expression pattern used by this guardrail. A match is used to evaluate whether the request or response should pass."
+      case "LLM": return "Write the rubric prompt for the evaluator model. Use {{text}} to insert the text being reviewed and ask for a true or false verdict."
+      default: return "Edit the guardrail content used when this item runs."
+    }
+  }
+
   const finalPrompt = useMemo(() => {
     if (typed) return null
     return codeContent.replaceAll("{{query}}", "<<query results>>").replaceAll("{{text}}", testInput)
@@ -190,34 +209,60 @@ export function VersionedEditorPage({ apiBaseURL, apiPath, title, typed }: Props
 
             <Stack spacing={2}>
               {typed && (
-                <TextField select label="Type" value={selectedType} onChange={(e) => { setSelectedType(e.target.value); setRunResult(null) }} size="small" fullWidth>
-                  {types.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-                </TextField>
+                <HelpedField title="Choose the guardrail engine. LLM uses a rubric prompt, Regex uses a pattern, and custom scripts use JavaScript or Python logic.">
+                  <TextField select label="Type" value={selectedType} onChange={(e) => { setSelectedType(e.target.value); setRunResult(null) }} size="small" fullWidth>
+                    {types.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+                  </TextField>
+                </HelpedField>
               )}
 
-              <TextField label="Name" inputRef={nameRef} defaultValue={active?.name || ""} key={`name-${active?.id}`} size="small" fullWidth />
-              <TextField label="Description" inputRef={descRef} defaultValue={active?.description || ""} key={`desc-${active?.id}`} size="small" fullWidth />
+              <HelpedField title={`Give this ${typed ? "guardrail" : "prompt template"} a short, recognizable name for lists, workflow configuration, and logs.`}>
+                <TextField label="Name" inputRef={nameRef} defaultValue={active?.name || ""} key={`name-${active?.id}`} size="small" fullWidth />
+              </HelpedField>
+              <HelpedField title={`Describe what this ${typed ? "guardrail checks" : "prompt template is for"} so future versions and workflow assignments are easier to review.`}>
+                <TextField label="Description" inputRef={descRef} defaultValue={active?.description || ""} key={`desc-${active?.id}`} size="small" fullWidth />
+              </HelpedField>
 
               <Box>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>{contentLabel()}</Typography>
                   {contentHint() && <Chip label={contentHint()!} size="small" variant="outlined" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }} />}
                 </Box>
-                <TextField key={`code-${active?.id}`} multiline rows={18} fullWidth value={codeContent} onChange={(e) => setCodeContent(e.target.value)} size="small" slotProps={{ input: { sx: { fontFamily: "ui-monospace, monospace", fontSize: "0.85rem" } } }} />
+                <HelpedField title={contentHelp()}>
+                  <TextField key={`code-${active?.id}`} multiline rows={18} fullWidth value={codeContent} onChange={(e) => setCodeContent(e.target.value)} size="small" slotProps={{ input: { sx: { fontFamily: "ui-monospace, monospace", fontSize: "0.85rem" } } }} />
+                </HelpedField>
               </Box>
 
-              {!typed && <TextField label="Query" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Enter query - replaces {{query}} in the template" size="small" fullWidth />}
-              <TextField label="Test input text" value={testInput} onChange={(e) => setTestInput(e.target.value)} placeholder={typed ? "Enter text to test the guardrail against" : "Enter text - replaces {{text}} in the template"} size="small" fullWidth />
+              {!typed && (
+                <HelpedField title="Enter a retrieval query for testing. Search results from this query replace {{query}} when you run the prompt template preview.">
+                  <TextField label="Query" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Enter query - replaces {{query}} in the template" size="small" fullWidth />
+                </HelpedField>
+              )}
+              <HelpedField title={typed ? "Enter sample text to run through this guardrail and verify whether it passes or fails." : "Enter sample user text for testing. This replaces {{text}} when you run the prompt template preview."}>
+                <TextField label="Test input text" value={testInput} onChange={(e) => setTestInput(e.target.value)} placeholder={typed ? "Enter text to test the guardrail against" : "Enter text - replaces {{text}} in the template"} size="small" fullWidth />
+              </HelpedField>
               <Button variant="contained" onClick={onRunCode} disabled={runLoading} sx={{ alignSelf: "flex-start" }}>{runLoading ? "Running..." : "Run"}</Button>
 
-              {!typed && templateResult !== null && <TextField label="Output" multiline rows={8} fullWidth value={templateResult.error ? `Error: ${templateResult.error}` : templateResult.output} placeholder="(no output)" size="small" color={templateResult.error ? "warning" : "success"} focused slotProps={{ input: { readOnly: true, sx: { fontFamily: "monospace", fontSize: "0.85rem" } } }} />}
+              {!typed && templateResult !== null && (
+                <HelpedField title="Shows the rendered template output or an error from the template test run. This field is read-only.">
+                  <TextField label="Output" multiline rows={8} fullWidth value={templateResult.error ? `Error: ${templateResult.error}` : templateResult.output} placeholder="(no output)" size="small" color={templateResult.error ? "warning" : "success"} focused slotProps={{ input: { readOnly: true, sx: { fontFamily: "monospace", fontSize: "0.85rem" } } }} />
+                </HelpedField>
+              )}
               {typed && runResult !== null && (
                 <>
-                  <TextField label="Detail" multiline rows={3} fullWidth value={runResult.error ? "" : runResult.detail} size="small" slotProps={{ input: { readOnly: true } }} />
-                  <TextField label={`Result - ${runResult.error ? "Error" : runResult.passed ? "Passed" : "Failed"}`} multiline rows={3} fullWidth value={runResult.error ? `Error: ${runResult.error}` : `passed: ${runResult.passed}\nengine: ${runResult.engine}`} size="small" color={runResultColor} focused slotProps={{ input: { readOnly: true } }} />
+                  <HelpedField title="Shows any detail returned by the guardrail run, such as an explanation from an LLM rubric or script output. This field is read-only.">
+                    <TextField label="Detail" multiline rows={3} fullWidth value={runResult.error ? "" : runResult.detail} size="small" slotProps={{ input: { readOnly: true } }} />
+                  </HelpedField>
+                  <HelpedField title="Shows whether the guardrail passed, failed, or errored during the test run. This field is read-only.">
+                    <TextField label={`Result - ${runResult.error ? "Error" : runResult.passed ? "Passed" : "Failed"}`} multiline rows={3} fullWidth value={runResult.error ? `Error: ${runResult.error}` : `passed: ${runResult.passed}\nengine: ${runResult.engine}`} size="small" color={runResultColor} focused slotProps={{ input: { readOnly: true } }} />
+                  </HelpedField>
                 </>
               )}
-              {finalPrompt !== null && <TextField label="Final prompt preview" multiline rows={8} fullWidth value={finalPrompt} placeholder="(type a query or input to preview)" size="small" slotProps={{ input: { readOnly: true, sx: { fontFamily: "monospace", fontSize: "0.85rem" } } }} />}
+              {finalPrompt !== null && (
+                <HelpedField title="Preview of the prompt after placeholders are substituted. This shows what the workflow will send after template rendering.">
+                  <TextField label="Final prompt preview" multiline rows={8} fullWidth value={finalPrompt} placeholder="(type a query or input to preview)" size="small" slotProps={{ input: { readOnly: true, sx: { fontFamily: "monospace", fontSize: "0.85rem" } } }} />
+                </HelpedField>
+              )}
             </Stack>
 
             <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: "block" }}>
