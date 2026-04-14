@@ -22,7 +22,7 @@
     "versions":[
       {"version":1,"content":"Example validation: require a non-empty topic field for research workflows.","updatedAt":"2026-03-28T00:00:00Z"},
       {"version":2,"content":"return !!input.topic && ['low','medium','high'].includes(input.priority);","updatedAt":"2026-03-29T00:00:00Z"},
-      {"version":3,"content":"const text = (input.text || \"\").trim();\nreturn text.length > 0 && text.length <= 5000;","updatedAt":"2026-04-01T00:00:00Z"}
+      {"version":3,"content":"var text = (input.text || \"\").trim();\nreturn text.length > 0 && text.length <= 5000;","updatedAt":"2026-04-01T00:00:00Z"}
     ],
     "updatedAt":"2026-04-01T00:00:00Z"
   },

@@ -21,7 +21,7 @@
     "currentVersion":2,
     "versions":[
       {"version":1,"content":"Example validation: reject outputs that contain secrets, API keys, or access tokens.","updatedAt":"2026-03-28T00:00:00Z"},
-      {"version":2,"content":"return !output.includes('sk-') && output.split(/\\s+/).length < 1500;","updatedAt":"2026-03-29T00:00:00Z"}
+      {"version":2,"content":"return output.indexOf('sk-') === -1 && output.split(/\\s+/).length < 1500;","updatedAt":"2026-03-29T00:00:00Z"}
     ],
     "updatedAt":"2026-03-29T00:00:00Z"
   },

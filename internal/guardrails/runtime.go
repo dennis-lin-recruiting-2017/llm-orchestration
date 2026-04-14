@@ -28,7 +28,7 @@ func (rt Runtime) Execute(ctx context.Context, item models.VersionedItem, input 
 	code := activeCode(item)
 	switch item.Type {
 	case "Regex":
-		return executeRegex(code, output)
+		return executeRegex(code, textForLLM(input, output))
 	case "CustomJavaScript":
 		return executeGoja(code, input, output)
 	case "CustomPython":
@@ -54,7 +54,7 @@ func (rt Runtime) ExecuteDetail(ctx context.Context, item models.VersionedItem, 
 	code := activeCode(item)
 	switch item.Type {
 	case "Regex":
-		passed, engine, err := executeRegex(code, output)
+		passed, engine, err := executeRegex(code, textForLLM(input, output))
 		if err != nil {
 			return RunResult{}, err
 		}
