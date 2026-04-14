@@ -1,4 +1,4 @@
-import { Box, Divider, List, ListItemButton, ListItemText, ListSubheader, Toolbar, Typography } from "@mui/material"
+import { Box, Divider, List, ListItemButton, ListItemText, Toolbar, Typography } from "@mui/material"
 import type { AppRoute } from "../lib/types"
 
 type Props = {
@@ -17,11 +17,8 @@ const sections: Array<{
       { label: "Overview", path: "/" },
       { label: "Prompt Templates", path: "/how-to-use/prompt-templates" },
       { label: "LLM Guardrails", path: "/how-to-use/guardrails-llm" },
-      { label: "JavaScript Guardrails", path: "/how-to-use/guardrails-javascript" },
-      { label: "Python Guardrails", path: "/how-to-use/guardrails-python" },
       { label: "Workflows", path: "/how-to-use/workflows" },
       { label: "Workflow Logs", path: "/how-to-use/workflow-logs" },
-      { label: "About the Author", path: "/about" },
     ],
   },
   {
@@ -58,32 +55,11 @@ export function DrawerNav({ route, onNavigate, onNavigateComplete }: Props) {
       </Toolbar>
       <Divider />
       {sections.map((section) => (
-        <Box key={section.label}>
-          <List
-            dense
-            disablePadding
-            subheader={
-              <ListSubheader
-                component="div"
-                disableSticky
-                sx={{
-                  bgcolor: "action.hover",
-                  borderBottom: "1px solid",
-                  borderTop: "1px solid",
-                  borderColor: "divider",
-                  color: "text.primary",
-                  fontSize: "0.78rem",
-                  fontWeight: 800,
-                  letterSpacing: 0,
-                  lineHeight: "34px",
-                  mt: 1,
-                  textTransform: "none",
-                }}
-              >
-                {section.label}
-              </ListSubheader>
-            }
-          >
+        <Box key={section.label} sx={{ py: 1 }}>
+          <Typography variant="overline" color="text.secondary" sx={{ px: 2, display: "block" }}>
+            {section.label}
+          </Typography>
+          <List dense disablePadding>
             {section.items.map((item) => (
               <ListItemButton key={item.path} selected={route === item.path} onClick={() => handleNavigate(item.path)}>
                 <ListItemText primary={item.label} slotProps={{ primary: { sx: { fontSize: "0.9rem" } } }} />

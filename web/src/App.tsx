@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react"
 import { Alert, AlertTitle, Box, IconButton } from "@mui/material"
 import CloseIcon from "@mui/icons-material/Close"
 import { getJSON } from "./lib/api"
-import { AboutPage } from "./components/Home/AboutPage"
 import { AppShell } from "./components/AppShell"
 import { GuardrailsJavascriptPage } from "./components/Home/GuardrailsJavascriptPage"
 import { GuardrailsLLMPage } from "./components/Home/GuardrailsLLMPage"
@@ -130,8 +129,6 @@ export default function App() {
     page = <HowToWorkflowsPage />
   } else if (route === "/how-to-use/workflow-logs") {
     page = <HowToWorkflowLogsPage />
-  } else if (route === "/about") {
-    page = <AboutPage />
   } else if (route === "/workspace") {
     page = <WorkspacePage cfg={{ webBaseURL: window.location.origin, apiBaseURL }} query={query} mode={searchMode} loading={searchLoading} results={searchResults} onQueryChange={setQuery} onSearch={onSearch} onChip={(chip, type) => { setQuery(chip); runSearch(chip, type) }} />
   } else if (route === "/prompt-templates") {
