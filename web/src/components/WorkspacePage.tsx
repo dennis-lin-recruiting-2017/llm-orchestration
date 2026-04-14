@@ -55,10 +55,11 @@ export function WorkspacePage(props: Props) {
   useEffect(() => { loadDocs() }, [loadDocs])
 
   const hasResults = props.results.length > 0
+  const reversedResults = [...props.results].reverse()
   const searchedIds = new Set(props.results.map((d) => d.id))
   const sortedDocs = hasResults
     ? [
-        ...props.results.map((r) => allDocs.find((d) => d.id === r.id)).filter((d): d is Document => !!d),
+        ...reversedResults.map((r) => allDocs.find((d) => d.id === r.id)).filter((d): d is Document => !!d),
         ...allDocs.filter((d) => !searchedIds.has(d.id)),
       ]
     : allDocs
@@ -104,7 +105,7 @@ export function WorkspacePage(props: Props) {
               {props.loading ? (
                 <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}><CircularProgress size={24} /></Box>
               ) : hasResults ? (
-                props.results.map((d) => <DocCard key={d.id} doc={d} match={d} />)
+                reversedResults.map((d) => <DocCard key={d.id} doc={d} match={d} />)
               ) : props.mode === "vector-no-embedding" ? (
                 <Typography variant="body2" color="text.secondary">
                   No vector embedding available. Try a keyword chip or switch to keyword search.

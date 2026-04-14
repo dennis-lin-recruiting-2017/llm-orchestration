@@ -3,7 +3,7 @@ import {
   Accordion, AccordionDetails, AccordionSummary,
   Box, Button, ButtonBase, Card, CardContent, Chip, Grid, Stack,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Typography,
+  TextField, Typography,
 } from "@mui/material"
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore"
 import type { WorkflowLogDetail, WorkflowLogListItem } from "../lib/types"
@@ -110,25 +110,59 @@ function DetailAccordion({ label, children, failBadge }: { label: string; childr
 }
 
 export function WorkflowLogsPage({ logs, selected, onRefresh, onSelect }: Props) {
+  const [templateFilter, setTemplateFilter] = useState("")
+  const [versionFilter, setVersionFilter] = useState("")
   const inputFailed = selected?.inputGuardrails?.some((g) => !g.passed) ?? false
   const outputFailed = selected?.outputGuardrails?.some((g) => !g.passed) ?? false
+  const normalizedTemplateFilter = templateFilter.trim().toLowerCase()
+  const normalizedVersionFilter = versionFilter.trim().toLowerCase()
+  const filteredLogs = logs.filter((item) => {
+    const templateValue = `${item.promptTemplateName || ""} ${item.promptTemplateId || ""}`.toLowerCase()
+    const versionValue = String(item.promptTemplateVersion ?? "").toLowerCase()
+    return (
+      (!normalizedTemplateFilter || templateValue.includes(normalizedTemplateFilter)) &&
+      (!normalizedVersionFilter || versionValue.includes(normalizedVersionFilter))
+    )
+  })
 
   return (
-    <Grid container spacing={2} sx={{ alignItems: "flex-start" }}>
-      <Grid size={{ xs: 12, md: 4 }}>
-        <Card sx={{ maxHeight: "calc(100vh - 160px)", overflow: "auto" }}>
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 12 }}>
+        <Card sx={{ height: "calc((100vh - 176px) / 2)", minHeight: 280, display: "flex", flexDirection: "column" }}>
           <CardContent>
             <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>Workflow logs</Typography>
               <Button size="small" variant="outlined" onClick={onRefresh}>Refresh</Button>
             </Stack>
-            <TableContainer>
+            <TableContainer sx={{ maxHeight: "calc((100vh - 176px) / 2 - 80px)" }}>
               <Table size="small">
                 <TableHead>
                   <TableRow><TableCell>Request ID</TableCell><TableCell>Timestamp</TableCell><TableCell>Template</TableCell><TableCell>v</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell />
+                    <TableCell />
+                    <TableCell>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Filter template"
+                        value={templateFilter}
+                        onChange={(event) => setTemplateFilter(event.target.value)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Filter version"
+                        value={versionFilter}
+                        onChange={(event) => setVersionFilter(event.target.value)}
+                      />
+                    </TableCell>
+                  </TableRow>
                 </TableHead>
                 <TableBody>
-                  {logs.map((item) => (
+                  {filteredLogs.map((item) => (
                     <TableRow key={item.requestId} hover selected={selected?.requestId === item.requestId} onClick={() => onSelect?.(item.requestId)} sx={{ cursor: "pointer" }}>
                       <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{item.requestId}</TableCell>
                       <TableCell sx={{ fontSize: "0.75rem" }}>{item.requestTimestamp}</TableCell>
@@ -143,15 +177,18 @@ export function WorkflowLogsPage({ logs, selected, onRefresh, onSelect }: Props)
         </Card>
       </Grid>
 
-      <Grid size={{ xs: 12, md: 8 }}>
-        <Card sx={{ maxHeight: "calc(100vh - 160px)", overflow: "auto" }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>Log details</Typography>
+      <Grid size={{ xs: 12 }}>
+        <Card sx={{ height: "calc((100vh - 176px) / 2)", minHeight: 320, display: "flex", flexDirection: "column" }}>
+          <CardContent sx={{ pb: 1, borderBottom: "1px solid", borderColor: "divider", flexShrink: 0 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Log details{selected ? ` - ${selected.requestId}` : ""}
+            </Typography>
+          </CardContent>
+          <CardContent sx={{ overflow: "auto", pt: 1 }}>
             {selected ? (
               <>
-                <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary" }}>{selected.requestId}</Typography>
-                <DetailAccordion label="{{query}} value"><Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>{selected.rawQuery || selected.query || "(none)"}</Box></DetailAccordion>
-                <DetailAccordion label="{{text}} value"><Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>{selected.text || "(none)"}</Box></DetailAccordion>
+                <DetailAccordion label="Search Query"><Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>{selected.rawQuery || selected.query || "(none)"}</Box></DetailAccordion>
+                <DetailAccordion label="User Prompt"><Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>{selected.text || "(none)"}</Box></DetailAccordion>
                 <DetailAccordion label="Query results"><Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>{selected.query || "(none)"}</Box></DetailAccordion>
                 <DetailAccordion label="Final prompt"><Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>{selected.finalPrompt || "(none)"}</Box></DetailAccordion>
                 <DetailAccordion label="LLM output"><Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>{selected.llmOutput || "(none)"}</Box></DetailAccordion>
