@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { Container } from "@mui/material"
 import type { AppRoute } from "../lib/types"
 
 type Props = {
@@ -10,9 +11,9 @@ type Props = {
 
 export function AppShell({ topNav, children }: Props) {
   return (
-    <div className="page">
+    <Container maxWidth="xl" sx={{ py: 3 }}>
       {topNav}
       {children}
-    </div>
+    </Container>
   )
 }

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
+import { Alert, AlertTitle, Box, IconButton } from "@mui/material"
+import CloseIcon from "@mui/icons-material/Close"
 import { getJSON } from "./lib/api"
 import { AboutPage } from "./components/Home/AboutPage"
 import { AppShell } from "./components/AppShell"
@@ -61,15 +63,17 @@ export default function App() {
 
   useEffect(() => {
     getJSON<AppConfig>("/config.json")
-      .then((cfg) => {
-        setApiBaseURL(cfg.apiBaseURL)
-        return getJSON<{ reachable: boolean; endpoint: string; model: string; error: string | null }>(
-          `${cfg.apiBaseURL}/api/llm-connections/ping`
-        )
-      })
-      .then((ping) => setLlmStatus({ reachable: ping.reachable, endpoint: ping.endpoint, error: ping.error ?? "" }))
+      .then((cfg) => setApiBaseURL(cfg.apiBaseURL))
       .catch(() => {/* keep default */})
   }, [])
+
+  useEffect(() => {
+    getJSON<{ reachable: boolean; endpoint: string; model: string; error: string | null }>(
+      `${apiBaseURL}/api/llm-connections/ping`
+    )
+      .then((ping) => setLlmStatus({ reachable: ping.reachable, endpoint: ping.endpoint, error: ping.error ?? "" }))
+      .catch(() => setLlmStatus({ reachable: false, endpoint: apiBaseURL, error: "Could not reach the backend server" }))
+  }, [apiBaseURL])
 
   useEffect(() => {
     const onPopState = () => setRoute(currentRoute())
@@ -150,10 +154,10 @@ export default function App() {
   }
 
   const content = isHomeTab ? (
-    <div className="app-shell">
+    <Box sx={{ display: "flex", gap: 2 }}>
       <DrawerNav route={route} onNavigate={onNavigate} />
       {page}
-    </div>
+    </Box>
   ) : page
 
   const showLlmWarning = llmStatus !== null && !llmStatus.reachable && !llmBannerDismissed
@@ -161,17 +165,27 @@ export default function App() {
   return (
     <AppShell route={route} onNavigate={onNavigate} topNav={<TopNav route={route} onNavigate={onNavigate} />}>
       {showLlmWarning && (
-        <div className="llm-warning-banner">
-          <span>
-            LLM server unreachable at <strong>{llmStatus!.endpoint || "—"}</strong>.
-            {llmStatus!.error ? ` ${llmStatus!.error}` : ""}{" "}
-            Workflows requiring inference will not produce output.{" "}
-            <button type="button" className="link-btn" onClick={() => onNavigate("/llm-connections")}>
-              Update connection
-            </button>
-          </span>
-          <button type="button" className="llm-warning-dismiss" onClick={() => setLlmBannerDismissed(true)} aria-label="Dismiss">✕</button>
-        </div>
+        <Alert
+          severity="warning"
+          sx={{ mb: 2 }}
+          action={
+            <IconButton size="small" onClick={() => setLlmBannerDismissed(true)} aria-label="Dismiss">
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          }
+        >
+          <AlertTitle>LLM server unreachable</AlertTitle>
+          Server at <strong>{llmStatus!.endpoint || "-"}</strong> is not responding.
+          {llmStatus!.error ? ` ${llmStatus!.error}.` : ""}{" "}
+          Workflows requiring inference will not produce output.{" "}
+          <Box
+            component="span"
+            sx={{ color: "primary.main", cursor: "pointer", textDecoration: "underline" }}
+            onClick={() => onNavigate("/llm-connections")}
+          >
+            Update connection
+          </Box>
+        </Alert>
       )}
       {content}
     </AppShell>

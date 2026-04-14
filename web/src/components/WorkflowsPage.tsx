@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import {
+  Box, Button, Card, CardContent, Checkbox, Chip, FormControlLabel,
+  Grid, MenuItem, Stack, TextField, Typography,
+} from "@mui/material"
 import { getJSON } from "../lib/api"
 import { fetchFormattedSearchResults } from "../lib/search"
 import type { Workflow, VersionedItem } from "../lib/types"
 
 type Props = { apiBaseURL: string }
-
 type RunResult = { llmOutput: string; error: string | null }
 
 export function WorkflowsPage({ apiBaseURL }: Props) {
@@ -15,12 +18,14 @@ export function WorkflowsPage({ apiBaseURL }: Props) {
   const [templates, setTemplates] = useState<VersionedItem[]>([])
   const [query, setQuery] = useState("")
   const [runResult, setRunResult] = useState<RunResult | null>(null)
-
-  useEffect(() => { setRunResult(null) }, [query])
   const [runLoading, setRunLoading] = useState(false)
-
+  const [promptTemplateId, setPromptTemplateId] = useState("")
+  const [inputGuardrailIds, setInputGuardrailIds] = useState<string[]>([])
+  const [outputGuardrailIds, setOutputGuardrailIds] = useState<string[]>([])
   const nameRef = useRef<HTMLInputElement>(null)
   const descRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { setRunResult(null) }, [query, activeId])
 
   const loadAll = useCallback(async () => {
     const [wfData, inputsData, outputsData, templatesData] = await Promise.all([
@@ -41,12 +46,20 @@ export function WorkflowsPage({ apiBaseURL }: Props) {
 
   const active = workflows.find((w) => w.id === activeId) ?? workflows[0] ?? null
 
-  useEffect(() => { setRunResult(null) }, [activeId])
+  useEffect(() => {
+    setPromptTemplateId(active?.promptTemplateId ?? "")
+    setInputGuardrailIds(active?.inputGuardrailIds ?? [])
+    setOutputGuardrailIds(active?.outputGuardrailIds ?? [])
+  }, [active?.id])
+
+  function toggleGuardrail(kind: "input" | "output", id: string) {
+    const setter = kind === "input" ? setInputGuardrailIds : setOutputGuardrailIds
+    setter((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))
+  }
 
   async function onNew() {
     const created = await getJSON<Workflow>(`${apiBaseURL}/api/workflows`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: "Untitled workflow", description: "" }),
     })
     setWorkflows((prev) => [created, ...prev])
@@ -56,22 +69,20 @@ export function WorkflowsPage({ apiBaseURL }: Props) {
   async function onSave() {
     if (!active) return
     const updated = await getJSON<Workflow>(`${apiBaseURL}/api/workflows/${active.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: nameRef.current?.value ?? active.name,
         description: descRef.current?.value ?? active.description,
-        promptTemplateId: active.promptTemplateId,
-        inputGuardrailIds: active.inputGuardrailIds,
-        outputGuardrailIds: active.outputGuardrailIds,
+        promptTemplateId,
+        inputGuardrailIds,
+        outputGuardrailIds,
       }),
     })
     setWorkflows((prev) => prev.map((w) => (w.id === active.id ? updated : w)))
   }
 
   async function onDelete() {
-    if (!active) return
-    if (!window.confirm(`Delete "${active.name}"?`)) return
+    if (!active || !window.confirm(`Delete "${active.name}"?`)) return
     await getJSON(`${apiBaseURL}/api/workflows/${active.id}`, { method: "DELETE" })
     setWorkflows((prev) => {
       const next = prev.filter((w) => w.id !== active.id)
@@ -82,144 +93,112 @@ export function WorkflowsPage({ apiBaseURL }: Props) {
 
   async function onRun() {
     if (!active) return
-    setRunLoading(true)
-    setRunResult(null)
+    setRunLoading(true); setRunResult(null)
     try {
       const resolvedQuery = await fetchFormattedSearchResults(apiBaseURL, query)
       const resp = await getJSON<{ llmOutput?: string; echo?: string }>(
         `${apiBaseURL}/ai/v1/workflow/${active.id}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rawQuery: query, query: resolvedQuery, text: query }),
-        }
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rawQuery: query, query: resolvedQuery, text: query }) }
       )
       setRunResult({ llmOutput: resp.llmOutput ?? resp.echo ?? "", error: null })
     } catch (err) {
       setRunResult({ llmOutput: "", error: String(err) })
-    } finally {
-      setRunLoading(false)
-    }
+    } finally { setRunLoading(false) }
   }
 
-  const url = active?.id
-    ? `${apiBaseURL}/ai/v1/workflow/${active.id}`
-    : `${apiBaseURL}/ai/v1/workflow/{workflow_id}`
+  const url = active?.id ? `${apiBaseURL}/ai/v1/workflow/${active.id}` : `${apiBaseURL}/ai/v1/workflow/{id}`
 
   return (
-    <main className="workflow-layout">
-      <section className="card scroll-pane">
-        <div className="section-row">
-          <h2>Workflows</h2>
-          <button type="button" onClick={onNew}>New</button>
-        </div>
+    <Grid container spacing={2} sx={{ alignItems: "flex-start" }}>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <Card sx={{ maxHeight: "calc(100vh - 160px)", overflow: "auto" }}>
+          <CardContent>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>Workflows</Typography>
+              <Button size="small" variant="contained" onClick={onNew}>New</Button>
+            </Stack>
+            <Stack spacing={1}>
+              {workflows.map((w) => (
+                <Card key={w.id} variant="outlined" onClick={() => setActiveId(w.id)} sx={{
+                  cursor: "pointer",
+                  borderColor: active?.id === w.id ? "primary.main" : "divider",
+                  bgcolor: active?.id === w.id ? "action.selected" : undefined,
+                }}>
+                  <CardContent sx={{ py: 1, "&:last-child": { pb: 1 } }}>
+                    <Typography variant="subtitle2">{w.name}</Typography>
+                    {w.description && <Typography variant="caption" color="text.secondary">{w.description}</Typography>}
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontFamily: "monospace", fontSize: "0.7rem" }}>{w.id}</Typography>
+                  </CardContent>
+                </Card>
+              ))}
+            </Stack>
+          </CardContent>
+        </Card>
+      </Grid>
 
-        <div className="item-list">
-          {workflows.map((w) => (
-            <button
-              type="button"
-              className={`item-card ${active?.id === w.id ? "active" : ""}`}
-              key={w.id}
-              onClick={() => setActiveId(w.id)}
-            >
-              <h3>{w.name}</h3>
-              <div className="meta">{w.description}</div>
-              <small className="mono">{w.id}</small>
-            </button>
-          ))}
-        </div>
-      </section>
+      <Grid size={{ xs: 12, md: 9 }}>
+        <Card>
+          <CardContent>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>Workflow editor</Typography>
+              <Stack direction="row" spacing={1}>
+                <Button size="small" variant="contained" onClick={onSave}>Save</Button>
+                <Button size="small" variant="outlined" color="error" onClick={onDelete}>Delete</Button>
+              </Stack>
+            </Stack>
 
-      <section className="card">
-        <div className="section-row">
-          <h2>Workflow editor</h2>
-          <div className="inline-actions">
-            <button type="button" onClick={onSave}>Save</button>
-            <button type="button" onClick={onDelete}>Delete</button>
-          </div>
-        </div>
+            <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary", display: "block", mb: 2 }}>{url}</Typography>
 
-        <div className="meta mono">{url}</div>
+            <Stack spacing={2}>
+              <TextField label="Workflow ID" value={active?.id || ""} size="small" fullWidth slotProps={{ input: { readOnly: true } }} key={`id-${active?.id}`} />
+              <TextField label="Name" inputRef={nameRef} defaultValue={active?.name || ""} size="small" fullWidth key={`name-${active?.id}`} />
+              <TextField label="Description" inputRef={descRef} defaultValue={active?.description || ""} size="small" fullWidth key={`desc-${active?.id}`} />
 
-        <label>
-          Workflow ID
-          <input readOnly defaultValue={active?.id || ""} key={`id-${active?.id}`} />
-        </label>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>Input guardrails</Typography>
+                <Box sx={{ maxHeight: 180, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 2, p: 1 }}>
+                  {inputs.map((g) => (
+                    <FormControlLabel
+                      key={g.id}
+                      control={<Checkbox checked={inputGuardrailIds.includes(g.id)} onChange={() => toggleGuardrail("input", g.id)} size="small" />}
+                      label={<Box><Typography variant="body2">{g.name}</Typography>{g.description && <Typography variant="caption" color="text.secondary">{g.description}</Typography>}{g.type && <Chip label={g.type} size="small" variant="outlined" sx={{ ml: 0.5, fontSize: "0.7rem" }} />}</Box>}
+                      sx={{ display: "flex", alignItems: "flex-start", mb: 0.5 }}
+                    />
+                  ))}
+                </Box>
+              </Box>
 
-        <label>
-          Name
-          <input ref={nameRef} defaultValue={active?.name || ""} key={`name-${active?.id}`} />
-        </label>
+              <TextField select label="Prompt template" value={promptTemplateId} onChange={(event) => setPromptTemplateId(event.target.value)} size="small" fullWidth>
+                <MenuItem value="">Select a prompt template</MenuItem>
+                {templates.map((t) => <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>)}
+              </TextField>
 
-        <label>
-          Description
-          <input ref={descRef} defaultValue={active?.description || ""} key={`desc-${active?.id}`} />
-        </label>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>Output guardrails</Typography>
+                <Box sx={{ maxHeight: 180, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 2, p: 1 }}>
+                  {outputs.map((g) => (
+                    <FormControlLabel
+                      key={g.id}
+                      control={<Checkbox checked={outputGuardrailIds.includes(g.id)} onChange={() => toggleGuardrail("output", g.id)} size="small" />}
+                      label={<Box><Typography variant="body2">{g.name}</Typography>{g.description && <Typography variant="caption" color="text.secondary">{g.description}</Typography>}{g.type && <Chip label={g.type} size="small" variant="outlined" sx={{ ml: 0.5, fontSize: "0.7rem" }} />}</Box>}
+                      sx={{ display: "flex", alignItems: "flex-start", mb: 0.5 }}
+                    />
+                  ))}
+                </Box>
+              </Box>
 
-        <label>Input guardrails</label>
-        <div className="check-list selector-scroll">
-          {inputs.map((g) => (
-            <label className="check-item" key={g.id}>
-              <input type="checkbox" defaultChecked={(active?.inputGuardrailIds || []).includes(g.id)} />
-              <div>
-                <strong>{g.name}</strong>
-                <div className="meta">{g.description}</div>
-                <div className="badge">{g.type || ""}</div>
-              </div>
-            </label>
-          ))}
-        </div>
-
-        <label>
-          Prompt template
-          <select defaultValue={active?.promptTemplateId || ""} key={`tpl-${active?.id}`}>
-            <option value="">Select a prompt template</option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-        </label>
-
-        <label>Output guardrails</label>
-        <div className="check-list selector-scroll">
-          {outputs.map((g) => (
-            <label className="check-item" key={g.id}>
-              <input type="checkbox" defaultChecked={(active?.outputGuardrailIds || []).includes(g.id)} />
-              <div>
-                <strong>{g.name}</strong>
-                <div className="meta">{g.description}</div>
-                <div className="badge">{g.type || ""}</div>
-              </div>
-            </label>
-          ))}
-        </div>
-
-        <div className="run-section">
-          <label>
-            Query
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Enter query — replaces {{query}} in the prompt template"
-            />
-          </label>
-          <button type="button" onClick={onRun} disabled={runLoading || !active}>
-            {runLoading ? "Running…" : "Run"}
-          </button>
-          {runResult !== null ? (
-            <label>
-              Output
-              <textarea
-                rows={8}
-                readOnly
-                value={runResult.error ? `Error: ${runResult.error}` : runResult.llmOutput}
-                placeholder="(no output)"
-                className={runResult.error ? "run-result-error" : ""}
-              />
-            </label>
-          ) : null}
-        </div>
-      </section>
-    </main>
+              <TextField label="Query" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Enter query - replaces {{query}} in the prompt template" size="small" fullWidth />
+              <Button variant="contained" onClick={onRun} disabled={runLoading || !active} sx={{ alignSelf: "flex-start" }}>
+                {runLoading ? "Running..." : "Run"}
+              </Button>
+              {runResult !== null && (
+                <TextField label="Output" multiline rows={8} fullWidth value={runResult.error ? `Error: ${runResult.error}` : runResult.llmOutput} placeholder="(no output)" size="small" color={runResult.error ? "warning" : "success"} focused slotProps={{ input: { readOnly: true, style: { fontFamily: "monospace" } } }} />
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
+      </Grid>
+    </Grid>
   )
 }

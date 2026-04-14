@@ -1,52 +1,46 @@
+import { Button, Card, CardContent, Grid, MenuItem, Stack, TextField, Typography } from "@mui/material"
 import type { LLMConnections } from "../lib/types"
 
 export function LLMConnectionsPage({ connections }: { connections: LLMConnections }) {
   return (
-    <main className="grid">
-      <section className="card">
-        <div className="section-row">
-          <h2>LLM connections</h2>
-          <button>Save</button>
-        </div>
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 12, md: 7 }}>
+        <Card>
+          <CardContent>
+            <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>LLM connections</Typography>
+              <Button variant="contained" size="small">Save</Button>
+            </Stack>
 
-        <div className="form-grid">
-          <label>
-            Provider
-            <select defaultValue={connections.provider}>
-              <option value="LMStudio">LM Studio</option>
-              <option value="Ollama">Ollama</option>
-            </select>
-          </label>
+            <Stack spacing={2}>
+              <TextField select label="Provider" defaultValue={connections.provider} size="small" fullWidth>
+                <MenuItem value="LMStudio">LM Studio</MenuItem>
+                <MenuItem value="Ollama">Ollama</MenuItem>
+              </TextField>
 
-          <h3>LM Studio</h3>
-          <label>
-            Base URL
-            <input defaultValue={connections.lmstudio.baseURL} />
-          </label>
-          <label>
-            Model
-            <input defaultValue={connections.lmstudio.model} />
-          </label>
+              <Typography variant="subtitle2" color="text.secondary">LM Studio</Typography>
+              <TextField label="Base URL" defaultValue={connections.lmstudio.baseURL} size="small" fullWidth />
+              <TextField label="Model" defaultValue={connections.lmstudio.model} size="small" fullWidth />
 
-          <h3>Ollama</h3>
-          <label>
-            Base URL
-            <input defaultValue={connections.ollama.baseURL} />
-          </label>
-          <label>
-            Model
-            <input defaultValue={connections.ollama.model} />
-          </label>
-        </div>
-      </section>
+              <Typography variant="subtitle2" color="text.secondary">Ollama</Typography>
+              <TextField label="Base URL" defaultValue={connections.ollama.baseURL} size="small" fullWidth />
+              <TextField label="Model" defaultValue={connections.ollama.model} size="small" fullWidth />
+            </Stack>
+          </CardContent>
+        </Card>
+      </Grid>
 
-      <section className="card">
-        <h2>Notes</h2>
-        <p className="meta">
-          Use this page to point the app at a local LM Studio or Ollama server.
-          Settings are stored in the user cache directory.
-        </p>
-      </section>
-    </main>
+      <Grid size={{ xs: 12, md: 5 }}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" sx={{ fontWeight: 700 }} gutterBottom>Notes</Typography>
+            <Typography color="text.secondary">
+              Use this page to point the app at a local LM Studio or Ollama server.
+              Settings are stored in the user cache directory.
+            </Typography>
+          </CardContent>
+        </Card>
+      </Grid>
+    </Grid>
   )
 }

@@ -1,3 +1,4 @@
+import { Box, List, ListItemButton, ListItemText, Typography } from "@mui/material"
 import type { AppRoute } from "../lib/types"
 import { drawerNavigation } from "../lib/navigation"
 
@@ -8,37 +9,39 @@ type Props = {
 
 export function DrawerNav({ route, onNavigate }: Props) {
   return (
-    <aside className="drawer">
-      <h2>LLM Orchestration</h2>
+    <Box sx={{ width: 260, flexShrink: 0 }}>
+      <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>LLM Orchestration</Typography>
+      <List dense disablePadding>
       {drawerNavigation.map((group) => (
-        <div className="drawer-group" key={group.label}>
+        <Box key={group.label}>
           {group.path ? (
-            <button
-              type="button"
-              className={`drawer-item ${route === group.path ? "active" : ""}`}
+            <ListItemButton
+              selected={route === group.path}
               onClick={() => onNavigate(group.path as AppRoute)}
             >
-              {group.label}
-            </button>
+              <ListItemText primary={group.label} />
+            </ListItemButton>
           ) : (
             <>
-              <div className="drawer-item">{group.label}</div>
-              <div className="drawer-sublist">
+              <ListItemButton>
+                <ListItemText primary={<Typography sx={{ fontWeight: 700 }}>{group.label}</Typography>} />
+              </ListItemButton>
+              <List dense disablePadding sx={{ pl: 2 }}>
                 {group.children?.map((child) => (
-                  <button
-                    type="button"
+                  <ListItemButton
                     key={child.path}
-                    className={`drawer-subitem ${route === child.path ? "active" : ""}`}
+                    selected={route === child.path}
                     onClick={() => onNavigate(child.path as AppRoute)}
                   >
-                    {child.label}
-                  </button>
+                    <ListItemText primary={child.label} slotProps={{ primary: { sx: { fontSize: "0.875rem" } } }} />
+                  </ListItemButton>
                 ))}
-              </div>
+              </List>
             </>
           )}
-        </div>
+        </Box>
       ))}
-    </aside>
+      </List>
+    </Box>
   )
 }

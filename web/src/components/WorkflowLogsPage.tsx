@@ -1,4 +1,92 @@
+import { useState } from "react"
+import {
+  Accordion, AccordionDetails, AccordionSummary,
+  Box, Button, ButtonBase, Card, CardContent, Chip, Grid, Stack,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Typography,
+} from "@mui/material"
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore"
 import type { WorkflowLogDetail, WorkflowLogListItem } from "../lib/types"
+
+type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue }
+
+const jsonSx = {
+  tree: { fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", fontSize: "0.85rem", lineHeight: 1.6 },
+  block: { display: "block", pl: 2.5, borderLeft: "1px solid", borderColor: "divider", my: 0.25 },
+  row: { display: "block" },
+  key: { color: "primary.light" },
+  index: { color: "text.secondary" },
+  string: { color: "success.light" },
+  number: { color: "warning.light" },
+  bool: { color: "secondary.light" },
+  null: { color: "text.disabled", fontStyle: "italic" },
+  punct: { color: "text.secondary" },
+  ellipsis: { color: "text.secondary", cursor: "pointer", "&:hover": { color: "text.primary" } },
+} as const
+
+function JsonNode({ value, depth = 0 }: { value: JsonValue; depth?: number }) {
+  const [open, setOpen] = useState(depth < 2)
+  if (value === null) return <Box component="span" sx={jsonSx.null}>null</Box>
+  if (typeof value === "boolean") return <Box component="span" sx={jsonSx.bool}>{value.toString()}</Box>
+  if (typeof value === "number") return <Box component="span" sx={jsonSx.number}>{value}</Box>
+  if (typeof value === "string") return <Box component="span" sx={jsonSx.string}>"{value}"</Box>
+  const isArray = Array.isArray(value)
+  const entries = isArray ? (value as JsonValue[]).map((v, i) => [String(i), v] as [string, JsonValue]) : Object.entries(value as { [k: string]: JsonValue })
+  const brackets: [string, string] = isArray ? ["[", "]"] : ["{", "}"]
+  if (entries.length === 0) return <Box component="span" sx={jsonSx.punct}>{brackets[0]}{brackets[1]}</Box>
+  return (
+    <Box component="span" sx={{ display: "inline" }}>
+      <ButtonBase component="button" onClick={() => setOpen((o) => !o)} sx={{ px: 0.25, mr: 0.25, minWidth: 14, borderRadius: 0.5, color: "primary.main", fontFamily: "inherit", fontSize: "0.75rem", lineHeight: 1, verticalAlign: "middle" }}>
+        {open ? "▾" : "▸"}
+      </ButtonBase>
+      <Box component="span" sx={jsonSx.punct}>{brackets[0]}</Box>
+      {open ? (
+        <Box component="span" sx={jsonSx.block}>
+          {entries.map(([k, v], i) => (
+            <Box component="span" sx={jsonSx.row} key={k}>
+              {!isArray && <Box component="span" sx={jsonSx.key}>"{k}"<Box component="span" sx={jsonSx.punct}>: </Box></Box>}
+              {isArray && <Box component="span" sx={jsonSx.index}>{k}<Box component="span" sx={jsonSx.punct}>: </Box></Box>}
+              <JsonNode value={v} depth={depth + 1} />
+              {i < entries.length - 1 && <Box component="span" sx={jsonSx.punct}>,</Box>}
+            </Box>
+          ))}
+        </Box>
+      ) : (
+        <Box component="span" sx={jsonSx.ellipsis} onClick={() => setOpen(true)}> ... </Box>
+      )}
+      <Box component="span" sx={jsonSx.punct}>{brackets[1]}</Box>
+    </Box>
+  )
+}
+
+function JsonView({ raw }: { raw: string }) {
+  try {
+    return <Box sx={jsonSx.tree}><JsonNode value={JSON.parse(raw)} depth={0} /></Box>
+  } catch {
+    return <Box component="pre" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "monospace", fontSize: "0.85rem", m: 0 }}>{raw}</Box>
+  }
+}
+
+function GuardrailRows({ items }: { items: WorkflowLogDetail["inputGuardrails"] }) {
+  if (!items?.length) return <Typography variant="body2" color="text.secondary">No entries</Typography>
+  return (
+    <Stack spacing={1}>
+      {items.map((g) => (
+        <Card key={g.guardrailId + g.createdAt} variant="outlined" sx={{ borderColor: g.passed ? "divider" : "error.main", bgcolor: g.passed ? undefined : "rgba(255,80,80,0.06)" }}>
+          <CardContent sx={{ py: 1, "&:last-child": { pb: 1 } }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+              <Typography variant="subtitle2">{g.guardrailId}</Typography>
+              <Chip label={g.guardrailType} size="small" variant="outlined" />
+              <Chip label={g.passed ? "Passed" : "Failed"} size="small" color={g.passed ? "success" : "error"} />
+            </Stack>
+            <Typography variant="caption" color="text.secondary">Engine: {g.engine} · {(g.durationMs ?? 0).toFixed(2)} ms</Typography>
+            {g.detail && <Typography variant="body2" sx={{ mt: 0.5 }}>{g.detail}</Typography>}
+          </CardContent>
+        </Card>
+      ))}
+    </Stack>
+  )
+}
 
 type Props = {
   logs: WorkflowLogListItem[]
@@ -7,158 +95,85 @@ type Props = {
   onSelect?: (requestId: string) => void
 }
 
-function GuardrailRows({ items }: { items: WorkflowLogDetail["inputGuardrails"] }) {
-  if (!items?.length) return <div className="meta">No entries</div>
-
+function DetailAccordion({ label, children, failBadge }: { label: string; children: React.ReactNode; failBadge?: boolean }) {
   return (
-    <>
-      {items.map((g) => (
-        <article className="history-card" key={g.guardrailId + g.createdAt}>
-          <h3>
-            {g.guardrailId} <span className="badge">{g.guardrailType}</span>
-          </h3>
-          <div className={g.passed ? "pass" : "fail"}>{g.passed ? "Passed" : "Failed"}</div>
-          <div className="meta">Engine: {g.engine} &nbsp;·&nbsp; {((g.durationMs ?? 0)).toFixed(2)} ms</div>
-          <p>{g.detail}</p>
-        </article>
-      ))}
-    </>
+    <Accordion disableGutters sx={{ mt: 1, borderColor: failBadge ? "error.main" : "divider", bgcolor: failBadge ? "rgba(255,80,80,0.04)" : undefined }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: failBadge ? "rgba(255,80,80,0.08)" : "background.paper" }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+          <Typography sx={{ fontWeight: 700 }}>{label}</Typography>
+          {failBadge && <Chip label="Failed" size="small" color="error" />}
+        </Stack>
+      </AccordionSummary>
+      <AccordionDetails sx={{ bgcolor: "background.default" }}>{children}</AccordionDetails>
+    </Accordion>
   )
 }
 
 export function WorkflowLogsPage({ logs, selected, onRefresh, onSelect }: Props) {
+  const inputFailed = selected?.inputGuardrails?.some((g) => !g.passed) ?? false
+  const outputFailed = selected?.outputGuardrails?.some((g) => !g.passed) ?? false
+
   return (
-    <main className="log-layout">
-      <section className="card scroll-pane">
-        <div className="section-row">
-          <h2>Workflow logs</h2>
-          <button onClick={onRefresh}>Refresh</button>
-        </div>
+    <Grid container spacing={2} sx={{ alignItems: "flex-start" }}>
+      <Grid size={{ xs: 12, md: 4 }}>
+        <Card sx={{ maxHeight: "calc(100vh - 160px)", overflow: "auto" }}>
+          <CardContent>
+            <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>Workflow logs</Typography>
+              <Button size="small" variant="outlined" onClick={onRefresh}>Refresh</Button>
+            </Stack>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow><TableCell>Request ID</TableCell><TableCell>Timestamp</TableCell><TableCell>Template</TableCell><TableCell>v</TableCell></TableRow>
+                </TableHead>
+                <TableBody>
+                  {logs.map((item) => (
+                    <TableRow key={item.requestId} hover selected={selected?.requestId === item.requestId} onClick={() => onSelect?.(item.requestId)} sx={{ cursor: "pointer" }}>
+                      <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{item.requestId}</TableCell>
+                      <TableCell sx={{ fontSize: "0.75rem" }}>{item.requestTimestamp}</TableCell>
+                      <TableCell sx={{ fontSize: "0.75rem" }}>{item.promptTemplateName || item.promptTemplateId || ""}</TableCell>
+                      <TableCell sx={{ fontSize: "0.75rem" }}>{item.promptTemplateVersion}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      </Grid>
 
-        <table className="log-table">
-          <thead>
-            <tr>
-              <th>Request ID</th>
-              <th>Request timestamp</th>
-              <th>Prompt template name</th>
-              <th>Prompt template version</th>
-            </tr>
-          </thead>
-          <tbody>
-            {logs.map((item) => (
-              <tr className={`log-row ${selected?.requestId === item.requestId ? "active" : ""}`} key={item.requestId} onClick={() => onSelect?.(item.requestId)}>
-                <td className="mono">{item.requestId}</td>
-                <td>{item.requestTimestamp}</td>
-                <td>{item.promptTemplateName || item.promptTemplateId || ""}</td>
-                <td>{item.promptTemplateVersion}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      <section className="card detail-scroll">
-        <div className="section-row">
-          <h2>Log details</h2>
-        </div>
-
-        {selected ? (
-          <>
-            <div className="meta mono">{selected.requestId}</div>
-
-            <details className="collapse">
-              <summary>{"{{query}}"} value</summary>
-              <div className="collapse-body">
-                <div className="pre">{selected.rawQuery || selected.query || "(none)"}</div>
-              </div>
-            </details>
-
-            <details className="collapse">
-              <summary>{"{{text}}"} value</summary>
-              <div className="collapse-body">
-                <div className="pre">{selected.text || "(none)"}</div>
-              </div>
-            </details>
-
-            <details className="collapse">
-              <summary>Query results</summary>
-              <div className="collapse-body">
-                <div className="pre">{selected.query || "(none)"}</div>
-              </div>
-            </details>
-
-            <details className="collapse">
-              <summary>Final prompt</summary>
-              <div className="collapse-body">
-                <div className="pre">{selected.finalPrompt || "(none)"}</div>
-              </div>
-            </details>
-
-            <details className="collapse">
-              <summary>LLM output</summary>
-              <div className="collapse-body">
-                <div className="pre">{selected.llmOutput || "(none)"}</div>
-              </div>
-            </details>
-
-            <details className="collapse">
-              <summary>Timing &amp; inference details</summary>
-              <div className="collapse-body">
-                <table className="log-table">
-                  <tbody>
-                    <tr>
-                      <td>Search duration</td>
-                      <td>{((selected.searchDurationUs ?? 0) / 1000).toFixed(2)} ms</td>
-                    </tr>
-                    <tr>
-                      <td>Inference duration</td>
-                      <td>{((selected.inferenceDurationUs ?? 0) / 1000).toFixed(2)} ms</td>
-                    </tr>
-                    <tr>
-                      <td>Inference endpoint</td>
-                      <td className="mono">{selected.inferenceEndpoint || "(none)"}</td>
-                    </tr>
-                    <tr>
-                      <td>Model</td>
-                      <td className="mono">{selected.inferenceModel || "(none)"}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </details>
-
-            <details className="collapse">
-              <summary>Request body</summary>
-              <div className="collapse-body">
-                <div className="pre">{selected.requestBody}</div>
-              </div>
-            </details>
-
-            <details className="collapse">
-              <summary>Input guardrails</summary>
-              <div className="collapse-body">
-                <GuardrailRows items={selected.inputGuardrails} />
-              </div>
-            </details>
-
-            <details className="collapse">
-              <summary>Output guardrails</summary>
-              <div className="collapse-body">
-                <GuardrailRows items={selected.outputGuardrails} />
-              </div>
-            </details>
-
-            <details className="collapse">
-              <summary>Response body</summary>
-              <div className="collapse-body">
-                <div className="pre">{selected.responseBody}</div>
-              </div>
-            </details>
-          </>
-        ) : (
-          <p className="meta">Select a request from the table to view details.</p>
-        )}
-      </section>
-    </main>
+      <Grid size={{ xs: 12, md: 8 }}>
+        <Card sx={{ maxHeight: "calc(100vh - 160px)", overflow: "auto" }}>
+          <CardContent>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>Log details</Typography>
+            {selected ? (
+              <>
+                <Typography variant="caption" sx={{ fontFamily: "monospace", color: "text.secondary" }}>{selected.requestId}</Typography>
+                <DetailAccordion label="{{query}} value"><Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>{selected.rawQuery || selected.query || "(none)"}</Box></DetailAccordion>
+                <DetailAccordion label="{{text}} value"><Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>{selected.text || "(none)"}</Box></DetailAccordion>
+                <DetailAccordion label="Query results"><Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>{selected.query || "(none)"}</Box></DetailAccordion>
+                <DetailAccordion label="Final prompt"><Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>{selected.finalPrompt || "(none)"}</Box></DetailAccordion>
+                <DetailAccordion label="LLM output"><Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>{selected.llmOutput || "(none)"}</Box></DetailAccordion>
+                <DetailAccordion label="Timing & inference">
+                  <Table size="small"><TableBody>
+                    <TableRow><TableCell>Search duration</TableCell><TableCell>{((selected.searchDurationUs ?? 0) / 1000).toFixed(2)} ms</TableCell></TableRow>
+                    <TableRow><TableCell>Inference duration</TableCell><TableCell>{((selected.inferenceDurationUs ?? 0) / 1000).toFixed(2)} ms</TableCell></TableRow>
+                    <TableRow><TableCell>Inference endpoint</TableCell><TableCell sx={{ fontFamily: "monospace" }}>{selected.inferenceEndpoint || "(none)"}</TableCell></TableRow>
+                    <TableRow><TableCell>Model</TableCell><TableCell sx={{ fontFamily: "monospace" }}>{selected.inferenceModel || "(none)"}</TableCell></TableRow>
+                  </TableBody></Table>
+                </DetailAccordion>
+                <DetailAccordion label="Request body"><JsonView raw={selected.requestBody} /></DetailAccordion>
+                <DetailAccordion label="Input guardrails" failBadge={inputFailed}><GuardrailRows items={selected.inputGuardrails} /></DetailAccordion>
+                <DetailAccordion label="Output guardrails" failBadge={outputFailed}><GuardrailRows items={selected.outputGuardrails} /></DetailAccordion>
+                <DetailAccordion label="Response body"><JsonView raw={selected.responseBody} /></DetailAccordion>
+              </>
+            ) : (
+              <Typography color="text.secondary">Select a request from the table to view details.</Typography>
+            )}
+          </CardContent>
+        </Card>
+      </Grid>
+    </Grid>
   )
 }

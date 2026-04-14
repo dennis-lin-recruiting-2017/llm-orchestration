@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useState } from "react"
+import {
+  Box, Button, Card, CardContent, Chip, CircularProgress, Grid, Stack,
+  TextField, Typography,
+} from "@mui/material"
 import { getJSON } from "../lib/api"
 import type { Document } from "../lib/types"
 
@@ -15,8 +19,29 @@ type Props = {
   onChip: (value: string, type: SearchType) => void
 }
 
+const chips = ["routing", "agents", "memory", "retrieval", "evaluation", "orchestration"]
+
+function DocCard({ doc, match }: { doc: Document; match?: Document }) {
+  return (
+    <Card
+      variant="outlined"
+      sx={{ mb: 1, borderColor: match ? "success.main" : "divider", bgcolor: match ? "action.selected" : undefined }}
+    >
+      <CardContent sx={{ py: 1, "&:last-child": { pb: 1 } }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.5 }}>
+          <Typography variant="subtitle2" sx={{ flex: 1 }}>{doc.title}</Typography>
+          <Chip label={doc.category} size="small" variant="outlined" />
+        </Stack>
+        <Typography variant="body2" color="text.secondary">{doc.body}</Typography>
+        {match && typeof match.distance === "number" && (
+          <Typography variant="caption" color="text.secondary">distance: {match.distance.toFixed(4)}</Typography>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function WorkspacePage(props: Props) {
-  const chips = ["routing", "agents", "memory", "retrieval", "evaluation", "orchestration"]
   const [allDocs, setAllDocs] = useState<Document[]>([])
   const [searchType, setSearchType] = useState<SearchType>("vector")
 
@@ -24,108 +49,89 @@ export function WorkspacePage(props: Props) {
     try {
       const data = await getJSON<{ documents: Document[] }>(`${props.cfg.apiBaseURL}/api/documents`)
       setAllDocs(data.documents ?? [])
-    } catch {
-      // keep empty on error
-    }
+    } catch { /* keep empty */ }
   }, [props.cfg.apiBaseURL])
 
-  useEffect(() => {
-    loadDocs()
-  }, [loadDocs])
+  useEffect(() => { loadDocs() }, [loadDocs])
 
   const hasResults = props.results.length > 0
   const searchedIds = new Set(props.results.map((d) => d.id))
-
-  // Sort all articles so matched results appear first in relevance order,
-  // followed by unmatched articles in their original corpus order.
   const sortedDocs = hasResults
     ? [
-        ...props.results.map((r) => allDocs.find((d) => d.id === r.id)).filter((d): d is Document => d !== undefined),
+        ...props.results.map((r) => allDocs.find((d) => d.id === r.id)).filter((d): d is Document => !!d),
         ...allDocs.filter((d) => !searchedIds.has(d.id)),
       ]
     : allDocs
 
-  function handleSearch() { props.onSearch(searchType) }
-  function handleChip(chip: string) { props.onChip(chip, searchType) }
-
   return (
-    <section className="content-shell">
-      <header className="hero">
-        <p className="eyebrow">Retrieval-augmented generation</p>
-        <h1>RAG</h1>
-        <p className="lede">
+    <Box>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="overline" color="primary">Retrieval-augmented generation</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 700 }} gutterBottom>RAG</Typography>
+        <Typography color="text.secondary">
           Web UI on {props.cfg.webBaseURL} and API on {props.cfg.apiBaseURL}.
-        </p>
-      </header>
+        </Typography>
+      </Box>
 
-      <main className="grid">
-        <section className="card">
-          <h2>Semantic search</h2>
-          <div className="search-row">
-            <input
-              value={props.query}
-              onChange={(e) => props.onQueryChange(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            />
-            <button onClick={() => { setSearchType("vector"); props.onSearch("vector") }}>Vector Search</button>
-            <button onClick={() => { setSearchType("keyword"); props.onSearch("keyword") }}>Keyword Search</button>
-          </div>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 7 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" sx={{ fontWeight: 700 }} gutterBottom>Semantic search</Typography>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 1 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={props.query}
+                  onChange={(e) => props.onQueryChange(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && props.onSearch(searchType)}
+                  placeholder="Search"
+                />
+                <Button variant="contained" onClick={() => { setSearchType("vector"); props.onSearch("vector") }}>Vector</Button>
+                <Button variant="outlined" onClick={() => { setSearchType("keyword"); props.onSearch("keyword") }}>Keyword</Button>
+              </Stack>
 
-          <div className="chips">
-            {chips.map((chip) => (
-              <button className="chip" key={chip} onClick={() => handleChip(chip)}>
-                {chip}
-              </button>
-            ))}
-          </div>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mb: 1.5 }}>
+                {chips.map((chip) => (
+                  <Chip key={chip} label={chip} clickable size="small" variant="outlined" color="primary" onClick={() => props.onChip(chip, searchType)} />
+                ))}
+              </Box>
 
-          <p className="meta">Mode: {props.mode || "—"}</p>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                Mode: {props.mode || "-"}
+              </Typography>
 
-          {props.loading ? (
-            <p>Loading…</p>
-          ) : hasResults ? (
-            <div className="results">
-              {props.results.map((d) => (
-                <article className="result-item" key={d.id}>
-                  <div className="result-title-row">
-                    <h3>{d.title}</h3>
-                    <span className="tag">{d.category}</span>
-                  </div>
-                  <p>{d.body}</p>
-                  {typeof d.distance === "number" && (
-                    <p className="meta">distance: {d.distance.toFixed(4)}</p>
-                  )}
-                </article>
-              ))}
-            </div>
-          ) : props.mode === "vector-no-embedding" ? (
-            <p className="meta">No vector embedding available for this query. Try a keyword chip or switch to keyword search.</p>
-          ) : (
-            <p className="meta">No results — try a keyword chip or freeform query.</p>
-          )}
-        </section>
+              {props.loading ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}><CircularProgress size={24} /></Box>
+              ) : hasResults ? (
+                props.results.map((d) => <DocCard key={d.id} doc={d} match={d} />)
+              ) : props.mode === "vector-no-embedding" ? (
+                <Typography variant="body2" color="text.secondary">
+                  No vector embedding available. Try a keyword chip or switch to keyword search.
+                </Typography>
+              ) : (
+                <Typography variant="body2" color="text.secondary">No results. Try a chip or freeform query.</Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
 
-        <section className="card">
-          <h2>All articles ({allDocs.length})</h2>
-          <div className="results scroll-pane">
-            {sortedDocs.map((d) => {
-              const match = props.results.find((r) => r.id === d.id)
-              return (
-                <article className={`result-item${match ? " run-result-pass" : ""}`} key={d.id}>
-                  <div className="result-title-row">
-                    <h3>{d.title}</h3>
-                    <span className="tag">{d.category}</span>
-                  </div>
-                  <p>{d.body}</p>
-                  {match && typeof match.distance === "number" && (
-                    <p className="meta">distance: {match.distance.toFixed(4)}</p>
-                  )}
-                </article>
-              )
-            })}
-          </div>
-        </section>
-      </main>
-    </section>
+        <Grid size={{ xs: 12, md: 5 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" sx={{ fontWeight: 700 }} gutterBottom>
+                All articles ({allDocs.length})
+              </Typography>
+              <Box sx={{ maxHeight: 600, overflowY: "auto", pr: 0.5 }}>
+                {sortedDocs.map((d) => {
+                  const match = props.results.find((r) => r.id === d.id)
+                  return <DocCard key={d.id} doc={d} match={match} />
+                })}
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Box>
   )
 }

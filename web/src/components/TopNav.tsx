@@ -1,3 +1,4 @@
+import { Box, Tab, Tabs } from "@mui/material"
 import type { AppRoute } from "../lib/types"
 
 const items: Array<{ path: AppRoute; label: string }> = [
@@ -18,18 +19,20 @@ export function TopNav({
   route: AppRoute
   onNavigate: (path: AppRoute) => void
 }) {
+  const value = items.findIndex((item) => item.path === route)
+
   return (
-    <header className="topbar">
-      {items.map((item) => (
-        <button
-          key={item.path}
-          type="button"
-          className={`navlink ${route === item.path ? "active" : ""}`}
-          onClick={() => onNavigate(item.path)}
-        >
-          {item.label}
-        </button>
-      ))}
-    </header>
+    <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
+      <Tabs
+        value={value < 0 ? false : value}
+        onChange={(_, next) => onNavigate(items[next].path)}
+        variant="scrollable"
+        scrollButtons="auto"
+      >
+        {items.map((item) => (
+          <Tab key={item.path} label={item.label} />
+        ))}
+      </Tabs>
+    </Box>
   )
 }
